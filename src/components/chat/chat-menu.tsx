@@ -1,12 +1,18 @@
 import { useState } from 'react';
 import { DropdownMenu } from 'radix-ui';
-import { LogOut, MessageCircle, Menu } from 'lucide-react';
+import { Copy, LogOut, MessageCircle, Menu } from 'lucide-react';
 import { useUserContext } from '../../context/user-context';
 import { NewMessageDialog } from './new-message-dialog';
 
 export function ChatMenu() {
-  const { logout } = useUserContext();
+  const { user, logout } = useUserContext();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
+
+  async function handleCopyUserCode() {
+    if (!user?.userCode) return;
+
+    await navigator.clipboard.writeText(user.userCode);
+  }
 
   async function handleLogout() {
     await logout();
@@ -18,7 +24,7 @@ export function ChatMenu() {
         <DropdownMenu.Trigger asChild>
           <button
             type='button'
-            className='grid size-10 place-items-center rounded-full text-text-secondary hover:bg-slate-100'
+            className='grid size-10 place-items-center rounded-full cursor-pointer text-text-secondary hover:bg-slate-100'
             aria-label='Menu'
           >
             <Menu size={22} />
@@ -37,6 +43,14 @@ export function ChatMenu() {
             >
               <MessageCircle size={18} />
               <span>Nuevo mensaje</span>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Item
+              className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+              onSelect={handleCopyUserCode}
+            >
+              <Copy size={18} />
+              <span>Copiar tu código de usuario</span>
             </DropdownMenu.Item>
 
             <DropdownMenu.Separator className='my-1 h-px bg-border' />
