@@ -1,7 +1,7 @@
 import axios, { AxiosError } from 'axios';
 
 export const httpClient = axios.create({
-  baseURL: `${import.meta.env.VITE_API_URL}${import.meta.env.VITE_API_PREFIX}${import.meta.env.VITE_API_VERSION}`,
+  baseURL: `${import.meta.env.VITE_API_URL}/${import.meta.env.VITE_API_PREFIX}/${import.meta.env.VITE_API_VERSION}`,
   withCredentials: true,
 });
 
