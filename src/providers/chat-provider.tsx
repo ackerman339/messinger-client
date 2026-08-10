@@ -159,7 +159,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => conversations.get(activeConversationId) || null,
     [conversations, activeConversationId],
   );
-
+  console.log('AAA', activeConversation?.members);
   function handleCurrentConversation(conversationId: string) {
     setActiveConversationId(conversationId);
   }
@@ -233,7 +233,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const targetReceiverId = receiverId || activeConversation?.members[0]?.userId;
+    const targetReceiverId =
+      receiverId ||
+      activeConversation?.members.filter((member) => member.user.id !== user?.id)[0].user.id;
 
     if (!targetReceiverId) {
       return;

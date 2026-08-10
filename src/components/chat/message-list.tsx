@@ -21,7 +21,7 @@ export function MessageList() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: 'instant',
-      block: 'nearest',
+      block: 'end',
     });
   });
 

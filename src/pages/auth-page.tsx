@@ -118,7 +118,7 @@ export function AuthPage() {
           {error ? <p className='text-sm text-red-500'>{error}</p> : null}
 
           <button
-            className='h-11 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50'
+            className='h-11 w-full rounded-lg bg-accent px-4 text-sm font-semibold text-white transition hover:bg-accent-hover disabled:opacity-50 cursor-pointer'
             type='submit'
             disabled={submitting}
           >
