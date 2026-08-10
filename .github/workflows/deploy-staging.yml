@@ -1,9 +1,9 @@
-name: Deploy Frontend
+name: Deploy to Render
 
 on:
   push:
     branches:
-      - main
+      - staging
 
 jobs:
   build:
