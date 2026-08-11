@@ -1,5 +1,7 @@
 import { httpClient } from '../clients/http-client';
 
+import type { Conversation } from '../types/conversation';
+import type { ApiResponse } from '../types/services-response';
 export interface CreateGroupDto {
   name: string;
   members: string[]; // user UUIDs
@@ -30,11 +32,15 @@ export interface GetConversationMessagesDto {
 }
 
 export const conversationApi = {
-  getBootstrap: () => httpClient.get('/conversation-list'),
+  getBootstrap: async () => {
+    const response = await httpClient.get<ApiResponse<Conversation[]>>('/conversation-list');
+    return response.data.result;
+  },
 
   getMessages: (params: GetConversationMessagesDto) =>
     httpClient.get('/conversation/messages', { params }),
 
+  // TODO: type responses
   createGroup: (data: CreateGroupDto) => httpClient.post('/conversation/create-group', data),
 
   leaveGroup: (data: LeaveGroupDto) => httpClient.post('/conversation/leave-group', data),
