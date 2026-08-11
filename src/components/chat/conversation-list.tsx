@@ -16,7 +16,7 @@ export function ConversationList() {
   );
 
   return (
-    <aside className='hidden min-h-0 border-r border-border bg-bg-sidebar md:grid md:grid-rows-[auto_1fr]'>
+    <aside className='min-h-full border-r border-border bg-bg-sidebar md:grid md:grid-rows-[auto_1fr]'>
       <header className='border-b border-border px-4 py-3'>
         <div className='flex items-center gap-3'>
           <ChatMenu />
@@ -37,15 +37,16 @@ export function ConversationList() {
             {loadingConversations ? <ListState label='Cargando conversaciones...' /> : null}
             {!loadingConversations && conversations.size === 0 ? (
               <ListState label='No tienes conversaciones aún' />
-            ) : null}
-            {conversationsItems.map((conversation) => (
-              <ConversationRow
-                conversation={conversation}
-                isActive={conversation.id === activeConversation?.id}
-                key={conversation.id}
-                onSelect={() => handleCurrentConversation(conversation.id)}
-              />
-            ))}
+            ) : (
+              conversationsItems.map((conversation) => (
+                <ConversationRow
+                  conversation={conversation}
+                  isActive={conversation.id === activeConversation?.id}
+                  key={conversation.id}
+                  onSelect={() => handleCurrentConversation(conversation.id)}
+                />
+              ))
+            )}
           </div>
         </ScrollArea.Viewport>
         <ScrollArea.Scrollbar

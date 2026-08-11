@@ -30,7 +30,7 @@ export function MessageList() {
   return (
     <ScrollArea.Root className='chat-paper min-h-0'>
       <ScrollArea.Viewport className='h-full'>
-        <div className='mx-auto flex min-h-full w-full max-w-4xl flex-col gap-2 px-4 py-6 sm:px-6 lg:px-8'>
+        <div className='mx-auto flex min-h-full w-full max-w-4xl flex-col gap-2 px-4 pt-6 sm:px-6 lg:px-8'>
           {hasConversation && <EmptyState label='Selecciona una conversación' />}
           {hasConversation && loading ? <EmptyState label='Cargando mensajes...' /> : null}
           {hasConversation && !loading && messages.length === 0 ? (
@@ -40,8 +40,8 @@ export function MessageList() {
           {messages.map((message) => (
             <MessageBubble key={message.id} message={message} />
           ))}
-          {<div ref={bottomRef} />}
         </div>
+        {<div className='h-1 mt-20' ref={bottomRef} />}
       </ScrollArea.Viewport>
       <ScrollArea.Scrollbar
         className='flex w-2 touch-none bg-transparent p-0.5'

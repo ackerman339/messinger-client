@@ -19,6 +19,7 @@ export type ChatContextValue = {
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
   getUserByCode: (userCode: string) => Promise<Response>;
   handleReceiverId: (id: string) => void;
+  unSetCurrentConversation: () => void;
 };
 
 export const ChatContext = createContext<ChatContextValue>({
@@ -35,6 +36,7 @@ export const ChatContext = createContext<ChatContextValue>({
   prepareAttachments: async () => [] as FileAttachment[],
   getUserByCode: async () => ({}) as User,
   handleReceiverId: () => {},
+  unSetCurrentConversation: () => {},
 });
 
 export function useChatContext() {

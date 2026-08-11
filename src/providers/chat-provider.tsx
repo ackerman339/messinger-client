@@ -158,6 +158,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [conversations, activeConversationId],
   );
 
+  function unSetCurrentConversation() {
+    setActiveConversationId('');
+  }
+
   function handleCurrentConversation(conversationId: string) {
     setActiveConversationId(conversationId);
   }
@@ -261,6 +265,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         prepareAttachments,
         getUserByCode,
         handleReceiverId,
+        unSetCurrentConversation,
       }}
     >
       {children}

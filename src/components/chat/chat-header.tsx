@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Avatar, Tooltip } from 'radix-ui';
-import { MoreVertical } from 'lucide-react';
+import { MoreVertical, ArrowLeft } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 
@@ -9,7 +9,7 @@ import type { ReactNode } from 'react';
 
 export function ChatHeader() {
   const { user } = useUserContext();
-  const { activeConversation } = useChatContext();
+  const { activeConversation, unSetCurrentConversation } = useChatContext();
 
   if (!activeConversation) {
     return null;
@@ -25,8 +25,17 @@ export function ChatHeader() {
       : privateConversationMember.username;
 
   return (
-    <header className='flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
+    <header className='sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
       <div className='flex min-w-0 items-center gap-3'>
+        <div className='block lg:hidden size-10 bg-none rounded-full'>
+          <button
+            type='button'
+            className='h-full w-full grid place-items-center cursor-pointer'
+            onClick={unSetCurrentConversation}
+          >
+            <ArrowLeft />
+          </button>
+        </div>
         <Avatar.Root className='grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
           <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
           <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>

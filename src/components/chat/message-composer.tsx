@@ -71,7 +71,7 @@ export function MessageComposer() {
   }
 
   return (
-    <footer className='border-t border-border bg-bg-app px-4 py-3'>
+    <footer className='sticky bottom-0 z-10 border-t border-border bg-bg-app px-4 py-3'>
       <form
         className='mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto_auto_auto] items-end gap-2'
         onSubmit={handleSubmit}

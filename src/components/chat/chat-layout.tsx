@@ -11,7 +11,20 @@ export function ChatLayout() {
 
   return (
     <main className='min-h-screen bg-bg-chat text-text-primary'>
-      <div className='grid h-screen grid-cols-1 overflow-hidden bg-bg-app md:grid-cols-[360px_1fr] lg:grid-cols-[400px_1fr]'>
+      {/*Mobile layout*/}
+      <div className='h-screen lg:hidden'>
+        {!activeConversation ? (
+          <ConversationList />
+        ) : (
+          <div className='grid-rows-[auto_minmax(0,1fr)_auto]'>
+            <ChatHeader />
+            <MessageList />
+            <TypingBar />
+            <MessageComposer />
+          </div>
+        )}
+      </div>
+      <div className='hidden lg:grid h-screen grid-cols-1 overflow-hidden bg-bg-app md:grid-cols-[360px_1fr] lg:grid-cols-[400px_1fr]'>
         <ConversationList />
         {!activeConversation ? (
           <section className='chat-paper full flex justify-center items-center flex-col'>
