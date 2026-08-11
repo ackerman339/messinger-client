@@ -10,7 +10,7 @@ import { ChatContext } from '../context/chat-context';
 
 import type { ReactNode } from 'react';
 import type { Conversation } from '../types/conversation';
-import type { FileAttachment, PresignedUrl, UploadContentType } from '../types/file';
+import type { FileAttachment, UploadContentType } from '../types/file';
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useUserContext();
@@ -42,7 +42,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             id: message.conversation.id,
             type: 'PRIVATE',
             name: 'Nueva Conversacion',
-            members: message.conversation.members.filter((member) => member.userId !== user?.id),
+            members: message.conversation.members.filter((member) => member.id !== user?.id),
             messagesCursor: null,
             createdAt: fallbackCreatedAt,
             updatedAt: fallbackUpdatedAt,
@@ -82,7 +82,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             id: message.conversation.id,
             type: 'PRIVATE',
             name: 'Nueva Conversacion',
-            members: message.conversation.members.filter((member) => member.userId !== user?.id),
+            members: message.conversation.members.filter((member) => member.id !== user?.id),
             messagesCursor: null,
             createdAt: fallbackCreatedAt,
             updatedAt: fallbackUpdatedAt,
@@ -132,13 +132,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async function loadConversations() {
       try {
         setError(null);
-        const response = await conversationApi.getBootstrap();
+        const conversations = await conversationApi.getBootstrap();
         if (ignore) return;
         setConversations(
           new Map(
-            response.data.conversations
-              .sort()
-              .map((conversation: Conversation) => [conversation.id, conversation]),
+            conversations.map((conversation: Conversation) => [conversation.id, conversation]),
           ),
         );
       } catch {
@@ -159,7 +157,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     () => conversations.get(activeConversationId) || null,
     [conversations, activeConversationId],
   );
-  console.log('AAA', activeConversation?.members);
+
   function handleCurrentConversation(conversationId: string) {
     setActiveConversationId(conversationId);
   }
@@ -181,9 +179,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       fileName: file.name,
     }));
 
-    const response = await fileApi.processUpload({ files: mappedFiles });
-    const uploadItems: PresignedUrl[] = response.data.result.presignedUrls;
-    const attachments: FileAttachment[] = response.data.result.pendingUploads.map((item: any) => {
+    const result = await fileApi.processUpload({ files: mappedFiles });
+    const uploadItems = result.presignedUrls;
+    const attachments = result.pendingUploads.map((item: any) => {
       return {
         id: item.id,
         fileName: item.fileName,
@@ -234,8 +232,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     const targetReceiverId =
-      receiverId ||
-      activeConversation?.members.filter((member) => member.user.id !== user?.id)[0].user.id;
+      receiverId || activeConversation?.members.filter((member) => member.id !== user?.id)[0].id;
 
     if (!targetReceiverId) {
       return;

@@ -5,17 +5,18 @@ import { UserContext } from '../context/user-context';
 
 import type { ReactNode } from 'react';
 import type { SignInDto, SignUpDto } from '../api/auth';
-import type { User } from '../context/user-context';
+import type { User } from '../types/user';
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
   // On mount, try to restore the session from the httpOnly cookie
   useEffect(() => {
     async function bootstrapSession() {
       try {
-        const res = await authApi.me();
-        setUser(res.data.result);
+        const user = await authApi.me();
+        setUser(user);
         connect(import.meta.env.VITE_WEB_SOCKET_URL);
       } catch {
         setUser(null);
@@ -28,14 +29,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (data: SignInDto) => {
-    const res = await authApi.signIn(data);
-    setUser(res.data.result);
+    const user = await authApi.signIn(data);
+    setUser(user);
     connect(import.meta.env.VITE_WEB_SOCKET_URL);
   };
 
   const signUp = async (data: SignUpDto) => {
-    const res = await authApi.signUp(data);
-    return res.data.result; // expected: { loginKey: string }
+    const response = await authApi.signUp(data);
+    return response;
   };
 
   const logout = async () => {

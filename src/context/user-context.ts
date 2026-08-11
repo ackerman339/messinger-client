@@ -1,18 +1,7 @@
 import { createContext, useContext } from 'react';
-import { UserRole, UserStatus } from '../api/auth';
 
+import type { User } from '../types/user';
 import type { SignInDto, SignUpDto } from '../api/auth';
-
-export interface User {
-  id: string;
-  username: string;
-  userCode: string;
-  avatarUrl: string | null;
-  role: UserRole;
-  status: UserStatus;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface UserContextValue {
   user: User | null;
