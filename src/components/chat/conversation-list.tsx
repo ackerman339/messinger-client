@@ -112,7 +112,7 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
           isActive ? 'text-white/80' : 'text-text-secondary',
         ].join(' ')}
       >
-        {format(new Date(conversation.updatedAt), 'HH:MM a', {
+        {format(new Date(conversation.updatedAt), 'HH:mm a', {
           locale: es,
         })}
       </time>

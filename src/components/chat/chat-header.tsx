@@ -36,7 +36,7 @@ export function ChatHeader() {
           {activeConversation.type === 'PRIVATE' && privateConversationMember.lastSeenAt && (
             <p className='truncate text-xs text-text-secondary'>
               <span>Ultima vez: </span>
-              {format(new Date(privateConversationMember.lastSeenAt!), "d 'de' MMMM yyyy HH:MM a", {
+              {format(new Date(privateConversationMember.lastSeenAt!), "d 'de' MMMM yyyy HH:mm a", {
                 locale: es,
               })}
             </p>

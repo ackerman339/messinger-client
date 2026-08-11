@@ -121,7 +121,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
         )}
         <div className='mt-1 flex items-center justify-end gap-1 text-[11px] text-text-secondary'>
           <time>
-            {format(new Date(message.createdAt), 'HH:MM a', {
+            {format(new Date(message.createdAt), 'dd MMM HH:mm', {
               locale: es,
             })}
           </time>
