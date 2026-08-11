@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react';
-import { conversationApi } from '../api/conversation';
-import { fileApi } from '../api/files';
-import { userApi } from '../api/user';
+import { conversationService } from '../services/conversation';
+import { fileService } from '../services/files';
+import { userService } from '../services/user';
 import { wsClient } from '../clients/websocket-client';
 import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '../types/websocket';
 import { useUserContext } from '../context/user-context';
@@ -132,7 +132,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     async function loadConversations() {
       try {
         setError(null);
-        const conversations = await conversationApi.getBootstrap();
+        const conversations = await conversationService.getBootstrap();
         if (ignore) return;
         setConversations(
           new Map(
@@ -167,7 +167,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   async function getUserByCode(userCode: string) {
-    const response = await userApi.getUserByCode({ userCode });
+    const response = await userService.getUserByCode({ userCode });
 
     return response.data.result;
   }
@@ -179,7 +179,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       fileName: file.name,
     }));
 
-    const result = await fileApi.processUpload({ files: mappedFiles });
+    const result = await fileService.processUpload({ files: mappedFiles });
     const uploadItems = result.presignedUrls;
     const attachments = result.pendingUploads.map((item: any) => {
       return {
@@ -200,7 +200,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           throw new Error(`No presigned URL for ${item.fileName}`);
         }
 
-        await fileApi.uploadFile(upload, uploadItem.url);
+        await fileService.uploadFile(upload, uploadItem.url);
       }),
     );
 

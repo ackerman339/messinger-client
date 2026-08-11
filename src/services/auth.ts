@@ -13,7 +13,7 @@ export interface SignInDto {
 
 type SignUpResponse = Pick<User, 'username' | 'status' | 'loginKey'>;
 
-export const authApi = {
+export const authService = {
   signUp: async (data: SignUpDto) => {
     const response = await httpClient.post<ApiResponse<SignUpResponse>>('/sign-up', data);
     return response.data.result;

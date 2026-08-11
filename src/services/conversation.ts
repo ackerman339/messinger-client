@@ -31,7 +31,7 @@ export interface GetConversationMessagesDto {
   limit?: number; // defaults to 30 on the server, max 50
 }
 
-export const conversationApi = {
+export const conversationService = {
   getBootstrap: async () => {
     const response = await httpClient.get<ApiResponse<Conversation[]>>('/conversation-list');
     return response.data.result;

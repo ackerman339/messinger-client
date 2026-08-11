@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 
 import type { User } from '../types/user';
-import type { SignInDto, SignUpDto } from '../api/auth';
+import type { SignInDto, SignUpDto } from '../services/auth';
 
 interface UserContextValue {
   user: User | null;

@@ -12,7 +12,7 @@ type DownloadResponse = {
   url: string;
 };
 
-export const fileApi = {
+export const fileService = {
   // R2 related service
   uploadFile: (file: File, url: string) =>
     httpClient.put(url, file, {

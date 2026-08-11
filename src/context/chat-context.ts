@@ -1,7 +1,9 @@
 import { createContext, useContext } from 'react';
 import type { Conversation } from '../types/conversation';
 import type { FileAttachment } from '../types/file';
-import type { User } from '../context/user-context';
+
+import type { User } from '../types/user';
+import type { Response } from '../services/user';
 
 export type ChatContextValue = {
   conversations: Map<string, Conversation>;
@@ -15,7 +17,7 @@ export type ChatContextValue = {
   handleSendMessage: (content: string, attachments: FileAttachment[]) => void;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
-  getUserByCode: (userCode: string) => Promise<User>;
+  getUserByCode: (userCode: string) => Promise<Response>;
   handleReceiverId: (id: string) => void;
 };
 

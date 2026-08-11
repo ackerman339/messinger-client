@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { authApi } from '../api/auth';
+import { authService } from '../services/auth';
 import { WS_SERVER_EVENTS } from '../types/websocket';
 import type { WsClientPayloads, WsServerPayloads, WsErrorCode } from '../types/websocket';
 
@@ -88,7 +88,7 @@ async function handleAuthError() {
     /**
      * Refresh the access token.
      */
-    await authApi.refresh();
+    await authService.refresh();
 
     /**
      * Close current socket intentionally.

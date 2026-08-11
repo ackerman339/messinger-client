@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { authApi } from '../api/auth';
+import { authService } from '../services/auth';
 import { connect, disconnect } from '../clients/websocket-client';
 import { UserContext } from '../context/user-context';
 
 import type { ReactNode } from 'react';
-import type { SignInDto, SignUpDto } from '../api/auth';
+import type { SignInDto, SignUpDto } from '../services/auth';
 import type { User } from '../types/user';
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -15,7 +15,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     async function bootstrapSession() {
       try {
-        const user = await authApi.me();
+        const user = await authService.me();
         setUser(user);
         connect(import.meta.env.VITE_WEB_SOCKET_URL);
       } catch {
@@ -29,18 +29,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = async (data: SignInDto) => {
-    const user = await authApi.signIn(data);
+    const user = await authService.signIn(data);
     setUser(user);
     connect(import.meta.env.VITE_WEB_SOCKET_URL);
   };
 
   const signUp = async (data: SignUpDto) => {
-    const response = await authApi.signUp(data);
+    const response = await authService.signUp(data);
     return response;
   };
 
   const logout = async () => {
-    await authApi.logout();
+    await authService.logout();
     disconnect();
     setUser(null);
   };

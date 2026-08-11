@@ -1,6 +1,6 @@
 import { useRef, useEffect, useMemo, useState } from 'react';
 import { ScrollArea } from 'radix-ui';
-import { fileApi } from '../../api/files';
+import { fileService } from '../../services/files';
 import { useUserContext } from '../../context/user-context';
 import { useChatContext } from '../../context/chat-context';
 import type { Message } from '../../types/conversation';
@@ -69,7 +69,7 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
     async function getDownloadUrls() {
       for (const attachment of message.attachments) {
-        const result = await fileApi.downloadFile({ attachmentId: attachment.id });
+        const result = await fileService.downloadFile({ attachmentId: attachment.id });
         downloads.push({ id: attachment.id, url: result.url });
       }
 
