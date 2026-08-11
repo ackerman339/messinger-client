@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { authService } from '../services/auth';
+import { authService } from '@services/auth';
 import Logo from '../assets/logo.svg';
 
 import type { SubmitEvent } from 'react';

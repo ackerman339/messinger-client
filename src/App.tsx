@@ -1,7 +1,7 @@
 import './App.css';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
-import { ChatPage } from './pages/chat-page';
-import { AuthPage } from './pages/auth-page';
+import { ChatPage } from '@pages/chat-page';
+import { AuthPage } from '@pages/auth-page';
 
 function App() {
   return (

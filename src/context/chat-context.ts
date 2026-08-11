@@ -1,9 +1,9 @@
 import { createContext, useContext } from 'react';
-import type { Conversation } from '../types/conversation';
-import type { FileAttachment } from '../types/file';
 
-import type { User } from '../types/user';
-import type { Response } from '../services/user';
+import type { Conversation } from '@/types/conversation';
+import type { FileAttachment } from '@/types/file';
+import type { User } from '@/types/user';
+import type { Response } from '@/services/user';
 
 export type ChatContextValue = {
   conversations: Map<string, Conversation>;

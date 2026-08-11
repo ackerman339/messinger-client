@@ -1,8 +1,9 @@
 import { Avatar, ScrollArea } from 'radix-ui';
-import { useUserContext } from '../../context/user-context';
-import { useChatContext } from '../../context/chat-context';
+import { useUserContext } from '@context/user-context';
+import { useChatContext } from '@context/chat-context';
 import { ChatMenu } from './chat-menu';
-import type { Conversation } from '../../types/conversation';
+
+import type { Conversation } from '@/types/conversation';
 
 export function ConversationList() {
   const { conversations, activeConversation, loadingConversations, handleCurrentConversation } =

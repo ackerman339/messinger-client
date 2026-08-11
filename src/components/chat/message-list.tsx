@@ -1,9 +1,9 @@
 import { useRef, useEffect, useMemo, useState } from 'react';
 import { ScrollArea } from 'radix-ui';
-import { fileService } from '../../services/files';
-import { useUserContext } from '../../context/user-context';
-import { useChatContext } from '../../context/chat-context';
-import type { Message } from '../../types/conversation';
+import { fileService } from '@services/files';
+import { useUserContext } from '@context/user-context';
+import { useChatContext } from '@context/chat-context';
+import type { Message } from '@/types/conversation';
 
 export function MessageList() {
   const { activeConversation } = useChatContext();

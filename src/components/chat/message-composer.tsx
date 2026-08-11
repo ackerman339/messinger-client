@@ -1,8 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
 import { Tooltip } from 'radix-ui';
 import { Smile, ChevronRight } from 'lucide-react';
-import { useChatContext } from '../../context/chat-context';
-import { VoiceRecorder } from '../chat/voice-recorder';
+import { useChatContext } from '@context/chat-context';
+import { VoiceRecorder } from '@components/chat/voice-recorder';
 import { AttachmentMenu } from './attachment-menu';
 
 import type { ReactNode, SubmitEvent } from 'react';

@@ -1,6 +1,6 @@
 import { Mic, Square, Trash2 } from 'lucide-react';
-import { useVoiceRecorder } from '../../hooks/use-voice-recorder';
-import { useChatContext } from '../../context/chat-context';
+import { useVoiceRecorder } from '@hooks/use-voice-recorder';
+import { useChatContext } from '@context/chat-context';
 
 export function VoiceRecorder() {
   const { prepareAttachments, handleSendMessage } = useChatContext();

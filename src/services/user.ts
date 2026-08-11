@@ -1,7 +1,7 @@
-import { httpClient } from '../clients/http-client';
+import { httpClient } from '@/clients/http-client';
 
-import type { User } from '../types/user';
-import type { ApiResponse } from '../types/services-response';
+import type { User } from '@/types/user';
+import type { ApiResponse } from '@/types/services-response';
 
 export interface GetUserByCodeDto {
   userCode: string;

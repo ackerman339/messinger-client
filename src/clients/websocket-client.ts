@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { authService } from '../services/auth';
-import { WS_SERVER_EVENTS } from '../types/websocket';
+import { authService } from '@services/auth';
+import { WS_SERVER_EVENTS } from '@/types/websocket';
 import type { WsClientPayloads, WsServerPayloads, WsErrorCode } from '../types/websocket';
 
 type ServerEvent = keyof WsServerPayloads;

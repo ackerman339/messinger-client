@@ -1,4 +1,4 @@
-import { useChatContext } from '../../context/chat-context';
+import { useChatContext } from '@context/chat-context';
 
 export function TypingBar() {
   const { typingUserIds } = useChatContext();

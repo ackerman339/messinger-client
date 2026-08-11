@@ -1,7 +1,7 @@
 import { Dialog } from 'radix-ui';
 import { X } from 'lucide-react';
 import { useState } from 'react';
-import { useChatContext } from '../../context/chat-context';
+import { useChatContext } from '@context/chat-context';
 import { MessageComposer } from './message-composer';
 
 type NewMessageDialogProps = {

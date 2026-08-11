@@ -1,7 +1,7 @@
-import { httpClient } from '../clients/http-client';
+import { httpClient } from '@/clients/http-client';
 
-import type { Conversation } from '../types/conversation';
-import type { ApiResponse } from '../types/services-response';
+import type { Conversation } from '@/types/conversation';
+import type { ApiResponse } from '@/types/services-response';
 export interface CreateGroupDto {
   name: string;
   members: string[]; // user UUIDs

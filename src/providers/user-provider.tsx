@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { authService } from '../services/auth';
-import { connect, disconnect } from '../clients/websocket-client';
-import { UserContext } from '../context/user-context';
+import { authService } from '@services/auth';
+import { connect, disconnect } from '@clients/websocket-client';
+import { UserContext } from '@context/user-context';
 
 import type { ReactNode } from 'react';
 import type { User } from '../types/user';

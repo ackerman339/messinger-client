@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react';
-import { conversationService } from '../services/conversation';
-import { fileService } from '../services/files';
-import { userService } from '../services/user';
-import { wsClient } from '../clients/websocket-client';
-import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '../types/websocket';
-import { useUserContext } from '../context/user-context';
-import { ChatContext } from '../context/chat-context';
+import { conversationService } from '@services/conversation';
+import { fileService } from '@services/files';
+import { userService } from '@services/user';
+import { wsClient } from '@clients/websocket-client';
+import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@/types/websocket';
+import { useUserContext } from '@context/user-context';
+import { ChatContext } from '@context/chat-context';
 
 import type { ReactNode } from 'react';
 import type { Conversation } from '../types/conversation';

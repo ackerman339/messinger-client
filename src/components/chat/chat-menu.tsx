@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DropdownMenu } from 'radix-ui';
 import { Copy, LogOut, MessageCircle, Menu } from 'lucide-react';
-import { useUserContext } from '../../context/user-context';
+import { useUserContext } from '@context/user-context';
 import { NewMessageDialog } from './new-message-dialog';
 
 export function ChatMenu() {

@@ -1,6 +1,6 @@
-import { httpClient } from '../clients/http-client';
+import { httpClient } from '@/clients/http-client';
 
-import type { ApiResponse } from '../types/services-response';
+import type { ApiResponse } from '@/types/services-response';
 import type { UploadDto, DownloadDto, PresignedUrl, FileAttachment } from '../types/file';
 
 type UploadResponse = {

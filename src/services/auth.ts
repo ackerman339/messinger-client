@@ -1,7 +1,7 @@
 import { httpClient } from '../clients/http-client';
 
-import type { User, UserRole } from '../types/user';
-import type { ApiResponse } from '../types/services-response';
+import type { User, UserRole } from '@/types/user';
+import type { ApiResponse } from '@/types/services-response';
 export interface SignUpDto {
   username: string;
   role?: UserRole; // defaults to UserRole.USER on the server

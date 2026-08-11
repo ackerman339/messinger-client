@@ -1,5 +1,5 @@
 import { MessagesSquare } from 'lucide-react';
-import { useChatContext } from '../../context/chat-context';
+import { useChatContext } from '@context/chat-context';
 import { ChatHeader } from './chat-header';
 import { ConversationList } from './conversation-list';
 import { MessageComposer } from './message-composer';

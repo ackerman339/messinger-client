@@ -2,8 +2,8 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Avatar, Tooltip } from 'radix-ui';
 import { MoreVertical } from 'lucide-react';
-import { useUserContext } from '../../context/user-context';
-import { useChatContext } from '../../context/chat-context';
+import { useUserContext } from '@context/user-context';
+import { useChatContext } from '@context/chat-context';
 
 import type { ReactNode } from 'react';
 

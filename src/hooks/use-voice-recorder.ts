@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { getSupportedAudioMimeType } from '../utils/audio';
+import { getSupportedAudioMimeType } from '@lib/utils';
 
 export function useVoiceRecorder() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
