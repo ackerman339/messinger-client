@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useUserContext } from '../context/user-context';
-import type { FormEvent } from 'react';
+import Logo from '../assets/logo.svg';
+
+import type { SubmitEvent } from 'react';
 
 type AuthMode = 'login' | 'signup';
 
@@ -20,7 +22,7 @@ export function AuthPage() {
     [location.pathname],
   );
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
     setCreatedLoginKey('');
@@ -48,7 +50,7 @@ export function AuthPage() {
       <section className='w-full max-w-sm rounded-lg bg-bg-app p-6 shadow-lg'>
         <div className='mb-6 text-center'>
           <div className='mx-auto mb-4 grid size-14 place-items-center rounded-full bg-accent text-lg font-semibold text-white'>
-            M
+            <img src={Logo} alt='App logo' className='h-full w-full rounded-full' />
           </div>
           <h1 className='text-2xl font-semibold'>{mode === 'login' ? 'Sign in' : 'Sign up'}</h1>
           <p className='mt-2 text-sm text-text-secondary'>
