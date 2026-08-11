@@ -16,7 +16,7 @@ export function ChatLayout() {
         {!activeConversation ? (
           <ConversationList />
         ) : (
-          <div className='grid-rows-[auto_minmax(0,1fr)_auto]'>
+          <div className='min-h-screen grid grid-rows-[auto_1fr_auto]'>
             <ChatHeader />
             <MessageList />
             <TypingBar />
@@ -27,7 +27,7 @@ export function ChatLayout() {
       <div className='hidden lg:grid h-screen grid-cols-1 overflow-hidden bg-bg-app md:grid-cols-[360px_1fr] lg:grid-cols-[400px_1fr]'>
         <ConversationList />
         {!activeConversation ? (
-          <section className='chat-paper full flex justify-center items-center flex-col'>
+          <section className='chat-paper flex justify-center items-center flex-col'>
             <MessagesSquare size={100} className='mb-2 text-accent' />
             <p className='text-3xl text-text-secondary'>
               Selecciona una conversación o envia un mensaje
