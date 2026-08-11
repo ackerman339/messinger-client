@@ -67,7 +67,7 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
   return (
     <button
       className={[
-        'grid w-full grid-cols-[48px_1fr_auto] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition',
+        'grid w-full grid-cols-[48px_1fr_auto] items-center gap-3 rounded-lg px-3 py-2.5 text-left transition cursor-pointer',
         isActive ? 'bg-accent text-white' : 'hover:bg-slate-100',
       ].join(' ')}
       type='button'

@@ -125,7 +125,7 @@ function ComposerButton({ label, icon, disabled }: ComposerButtonProps) {
     <Tooltip.Root>
       <Tooltip.Trigger asChild>
         <button
-          className='grid size-11 place-items-center rounded-full text-2xl text-text-secondary transition hover:bg-slate-100 hover:text-text-primary disabled:opacity-40'
+          className='grid size-11 place-items-center rounded-full text-2xl text-text-secondary transition hover:bg-slate-100 hover:text-text-primary disabled:opacity-40 cursor-pointer'
           type='button'
           aria-label={label}
           disabled={disabled}

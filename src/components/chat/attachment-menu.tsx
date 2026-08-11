@@ -30,7 +30,7 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
           <button
             type='button'
             disabled={disabled}
-            className='grid size-11 place-items-center rounded-full text-text-secondary transition hover:bg-slate-100 hover:text-text-primary disabled:opacity-40'
+            className='grid size-11 place-items-center rounded-full text-text-secondary transition hover:bg-slate-100 hover:text-text-primary disabled:opacity-40 cursor-pointer'
             aria-label='Attach file'
             title='Attach file'
           >

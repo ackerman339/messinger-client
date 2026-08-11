@@ -44,7 +44,7 @@ export function VoiceRecorder() {
       <button
         type='button'
         onClick={handleStart}
-        className='grid size-11 place-items-center rounded-full hover:bg-slate-100'
+        className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer'
         aria-label='Record voice message'
         title='Record voice message'
       >
@@ -58,7 +58,7 @@ export function VoiceRecorder() {
       <button
         type='button'
         onClick={handleCancel}
-        className='grid size-11 place-items-center rounded-full hover:bg-slate-100'
+        className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer'
         aria-label='Cancel recording'
         title='Cancel recording'
       >
@@ -74,7 +74,7 @@ export function VoiceRecorder() {
       <button
         type='button'
         onClick={handleStop}
-        className='grid size-11 place-items-center rounded-full bg-accent text-white'
+        className='grid size-11 place-items-center rounded-full bg-accent text-white cursor-pointer'
         aria-label='Stop recording'
         title='Stop recording'
       >
