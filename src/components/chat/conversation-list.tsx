@@ -1,4 +1,5 @@
 import { Avatar, ScrollArea } from 'radix-ui';
+import { useUserContext } from '../../context/user-context';
 import { useChatContext } from '../../context/chat-context';
 import { ChatMenu } from './chat-menu';
 import type { Conversation } from '../../types/conversation';
@@ -62,7 +63,14 @@ type ConversationRowProps = {
 };
 
 function ConversationRow({ conversation, isActive, onSelect }: ConversationRowProps) {
-  const title = conversation?.name || conversation.members[0]?.user.username || '';
+  const { user } = useUserContext();
+
+  const privateConversationMember = conversation?.members.filter(
+    (member) => member.id !== user?.id,
+  )[0];
+
+  const title =
+    conversation.type === 'GROUP' ? conversation?.name : privateConversationMember.username;
 
   return (
     <button
@@ -75,7 +83,7 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
     >
       <Avatar.Root className='relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
         <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
-        <Avatar.Fallback>{title.slice(0, 2).toUpperCase()}</Avatar.Fallback>
+        <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
         {/*   {conversation.online ? (
           <span className='absolute bottom-0 right-0 size-3 rounded-full border-2 border-white bg-online' />
         ) : null} */}

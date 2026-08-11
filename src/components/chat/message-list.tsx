@@ -69,11 +69,11 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
     async function getDownloadUrls() {
       for (const attachment of message.attachments) {
-        const response = await fileApi.downloadFile({ attachmentId: attachment.id });
-        downloads.push({ id: attachment.id, url: response.data.result.url });
+        const result = await fileApi.downloadFile({ attachmentId: attachment.id });
+        downloads.push({ id: attachment.id, url: result.url });
       }
 
-      setDownloads(new Map(downloads.map((donwload) => [donwload.id, donwload.url])));
+      setDownloads(new Map(downloads.map((download) => [download.id, download.url])));
     }
 
     getDownloadUrls();
