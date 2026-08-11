@@ -1,3 +1,5 @@
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Avatar, ScrollArea } from 'radix-ui';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
@@ -19,10 +21,10 @@ export function ConversationList() {
         <div className='flex items-center gap-3'>
           <ChatMenu />
           <label className='flex h-10 flex-1 items-center rounded-full bg-slate-100 px-4 text-sm text-text-secondary'>
-            <span className='sr-only'>Search conversations</span>
+            <span className='sr-only'>Buscar conversaciones</span>
             <input
               className='w-full bg-transparent text-text-primary outline-none placeholder:text-text-secondary'
-              placeholder='Search'
+              placeholder='Buscar conversaciones'
               type='search'
             />
           </label>
@@ -32,9 +34,9 @@ export function ConversationList() {
       <ScrollArea.Root className='min-h-0 overflow-hidden'>
         <ScrollArea.Viewport className='h-full'>
           <div className='p-2'>
-            {loadingConversations ? <ListState label='Loading conversations...' /> : null}
+            {loadingConversations ? <ListState label='Cargando conversaciones...' /> : null}
             {!loadingConversations && conversations.size === 0 ? (
-              <ListState label='No conversations yet' />
+              <ListState label='No tienes conversaciones aún' />
             ) : null}
             {conversationsItems.map((conversation) => (
               <ConversationRow
@@ -104,15 +106,16 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
         }
       </span>
 
-      <span
+      <time
         className={[
           'self-start pt-0.5 text-xs',
           isActive ? 'text-white/80' : 'text-text-secondary',
         ].join(' ')}
       >
-        ---
-        {/*  {conversation.timestamp} */}
-      </span>
+        {format(new Date(conversation.updatedAt), 'HH:MM a', {
+          locale: es,
+        })}
+      </time>
     </button>
   );
 }

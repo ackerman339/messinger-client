@@ -1,4 +1,6 @@
 import { useRef, useEffect, useMemo, useState } from 'react';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { ScrollArea } from 'radix-ui';
 import { fileService } from '@services/files';
 import { useUserContext } from '@context/user-context';
@@ -29,10 +31,10 @@ export function MessageList() {
     <ScrollArea.Root className='chat-paper min-h-0'>
       <ScrollArea.Viewport className='h-full'>
         <div className='mx-auto flex min-h-full w-full max-w-4xl flex-col gap-2 px-4 py-6 sm:px-6 lg:px-8'>
-          {hasConversation && <EmptyState label='Select a conversation' />}
-          {hasConversation && loading ? <EmptyState label='Loading messages...' /> : null}
+          {hasConversation && <EmptyState label='Selecciona una conversación' />}
+          {hasConversation && loading ? <EmptyState label='Cargando mensajes...' /> : null}
           {hasConversation && !loading && messages.length === 0 ? (
-            <EmptyState label='No messages yet' />
+            <EmptyState label='No hay mensaje todavía' />
           ) : null}
           {error ? <EmptyState label={error} /> : null}
           {messages.map((message) => (
@@ -119,10 +121,9 @@ function MessageBubble({ message }: MessageBubbleProps) {
         )}
         <div className='mt-1 flex items-center justify-end gap-1 text-[11px] text-text-secondary'>
           <time>
-            {new Intl.DateTimeFormat(undefined, {
-              hour: '2-digit',
-              minute: '2-digit',
-            }).format(new Date(message.createdAt))}
+            {format(new Date(message.createdAt), 'HH:MM a', {
+              locale: es,
+            })}
           </time>
           {isOwn ? <span className='text-accent'>✓✓</span> : null}
         </div>

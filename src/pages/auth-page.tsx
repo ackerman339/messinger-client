@@ -38,7 +38,7 @@ export function AuthPage() {
       setCreatedLoginKey(response.loginKey);
     } catch (error: unknown) {
       console.log(error);
-      setError(mode === 'sign-in' ? 'Invalid login key' : 'Could not create user');
+      setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
     } finally {
       setSubmitting(false);
     }
@@ -49,13 +49,12 @@ export function AuthPage() {
       <section className='w-full max-w-sm rounded-lg bg-bg-app p-6 shadow-lg'>
         <div className='mb-6 text-center'>
           <div className='mx-auto mb-4 grid size-14 place-items-center rounded-full bg-accent text-lg font-semibold text-white'>
-            <img src={Logo} alt='App logo' className='h-full w-full rounded-full' />
+            <img src={Logo} alt='Logo' className='h-full w-full rounded-full' />
           </div>
-          <h1 className='text-2xl font-semibold'>{mode === 'sign-in' ? 'Sign in' : 'Sign up'}</h1>
           <p className='mt-2 text-sm text-text-secondary'>
             {mode === 'sign-in'
-              ? 'Use your login key to enter the chat.'
-              : 'Create a username and save your login key.'}
+              ? 'Usa tu clave de acceso para chatear.'
+              : 'Crea un nombre de usuario y guarda tu clave de acceso'}
           </p>
         </div>
 
@@ -69,7 +68,7 @@ export function AuthPage() {
             ].join(' ')}
             to='/sign-in'
           >
-            Sign in
+            Entra
           </Link>
           <Link
             className={[
@@ -80,30 +79,34 @@ export function AuthPage() {
             ].join(' ')}
             to='/sign-up'
           >
-            Sign up
+            Regístrate
           </Link>
         </div>
 
         <form className='space-y-4' onSubmit={handleSubmit}>
           {mode === 'sign-in' ? (
             <label className='block'>
-              <span className='mb-2 block text-sm font-medium text-text-primary'>Login key</span>
+              <span className='mb-2 block text-sm font-medium text-text-primary'>
+                Clave de accesso
+              </span>
               <input
                 className='h-11 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20'
                 value={loginKey}
                 onChange={(event) => setLoginKey(event.target.value)}
-                placeholder='Paste your login key'
+                placeholder='AABBCCDD'
                 required
               />
             </label>
           ) : (
             <label className='block'>
-              <span className='mb-2 block text-sm font-medium text-text-primary'>Username</span>
+              <span className='mb-2 block text-sm font-medium text-text-primary'>
+                Tu nombre de usuario
+              </span>
               <input
                 className='h-11 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20'
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder='Choose a username'
+                placeholder='John Doe'
                 required
               />
             </label>
@@ -111,7 +114,7 @@ export function AuthPage() {
 
           {createdLoginKey ? (
             <div className='rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm'>
-              <p className='font-medium text-text-primary'>Your login key</p>
+              <p className='font-medium text-text-primary'>Tu clave de acceso, no la pierdas!</p>
               <p className='mt-1 break-all font-mono text-accent'>{createdLoginKey}</p>
             </div>
           ) : null}
@@ -125,11 +128,11 @@ export function AuthPage() {
           >
             {submitting
               ? mode === 'sign-in'
-                ? 'Signing in...'
-                : 'Creating account...'
+                ? 'Entrando...'
+                : 'Creando cuenta...'
               : mode === 'sign-in'
-                ? 'Sign in'
-                : 'Create account'}
+                ? 'Entrar'
+                : 'Registrar'}
           </button>
         </form>
       </section>

@@ -17,8 +17,8 @@ export function TypingBar() {
         </span>
         <span className='truncate'>
           {typingUserIds.length === 1
-            ? 'Someone is typing...'
-            : `${typingUserIds.length} people are typing...`}
+            ? 'Escribiendo...'
+            : `${typingUserIds.length} están escribiendo...`}
         </span>
       </div>
     </div>

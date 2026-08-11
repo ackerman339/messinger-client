@@ -20,7 +20,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 function RouteLoader() {
   return (
     <main className='grid min-h-screen place-items-center bg-bg-chat text-sm text-text-secondary'>
-      Loading...
+      Cargando...
     </main>
   );
 }

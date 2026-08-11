@@ -17,7 +17,7 @@ export function ChatLayout() {
           <section className='chat-paper full flex justify-center items-center flex-col'>
             <MessagesSquare size={100} className='mb-2 text-accent' />
             <p className='text-3xl text-text-secondary'>
-              Selecciona una conversation o envia un mensaje
+              Selecciona una conversación o envia un mensaje
             </p>
           </section>
         ) : (

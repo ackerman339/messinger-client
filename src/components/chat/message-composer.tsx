@@ -79,11 +79,11 @@ export function MessageComposer() {
         <Tooltip.Provider delayDuration={150}>
           <AttachmentMenu disabled={disabled} onFilesSelected={uploadFiles} />
           <label className='min-h-11 rounded-xl bg-slate-100 px-4 py-2.5'>
-            <span className='sr-only'>Message</span>
+            <span className='sr-only'>Escribe un mensaje</span>
             <textarea
               ref={textareaRef}
               className='max-h-32 min-h-6 w-full resize-none bg-transparent text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
-              placeholder='Message'
+              placeholder='Escribe un mensaje'
               rows={1}
               disabled={disabled}
               value={message}
@@ -102,8 +102,8 @@ export function MessageComposer() {
           <button
             className='grid size-11 place-items-center rounded-full bg-accent text-xl text-white transition hover:bg-accent-hover disabled:opacity-40'
             type='submit'
-            aria-label='Send message'
-            title='Send message'
+            aria-label='enviar mensaje'
+            title='Enviar mensaje'
             disabled={disabled || !message.trim()}
           >
             <ChevronRight />

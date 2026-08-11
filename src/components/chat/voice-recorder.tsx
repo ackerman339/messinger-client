@@ -45,8 +45,8 @@ export function VoiceRecorder() {
         type='button'
         onClick={handleStart}
         className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer'
-        aria-label='Record voice message'
-        title='Record voice message'
+        aria-label='grabar nota de voz'
+        title='Grabar nota de voz'
       >
         <Mic />
       </button>
@@ -59,8 +59,8 @@ export function VoiceRecorder() {
         type='button'
         onClick={handleCancel}
         className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer'
-        aria-label='Cancel recording'
-        title='Cancel recording'
+        aria-label='cancelar grabación'
+        title='Cancelar grabación'
       >
         <Trash2 />
       </button>
@@ -68,15 +68,15 @@ export function VoiceRecorder() {
       <div className='flex items-center gap-2'>
         <span className='size-2 animate-pulse rounded-full bg-red-500' />
 
-        <span className='text-sm'>Recording...</span>
+        <span className='text-sm'>Grabando...</span>
       </div>
 
       <button
         type='button'
         onClick={handleStop}
         className='grid size-11 place-items-center rounded-full bg-accent text-white cursor-pointer'
-        aria-label='Stop recording'
-        title='Stop recording'
+        aria-label='detener grabación'
+        title='Detener grabación'
       >
         <Square size={18} />
       </button>
