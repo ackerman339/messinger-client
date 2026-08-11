@@ -1,5 +1,6 @@
 import { Navigate } from 'react-router-dom';
 import { useUserContext } from '../context/user-context';
+
 import type { ReactNode } from 'react';
 
 export function RequireAuth({ children }: { children: ReactNode }) {
@@ -10,21 +11,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
 
   if (!user) {
-    return <Navigate to='/signin' replace />;
-  }
-
-  return children;
-}
-
-export function PublicOnly({ children }: { children: ReactNode }) {
-  const { user, loading } = useUserContext();
-
-  if (loading) {
-    return <RouteLoader />;
-  }
-
-  if (user) {
-    return <Navigate to='/chat' replace />;
+    return <Navigate to='/sign-in' replace />;
   }
 
   return children;

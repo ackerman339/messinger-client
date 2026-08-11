@@ -1,16 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useUserContext } from '../context/user-context';
+import { authService } from '../services/auth';
 import Logo from '../assets/logo.svg';
 
 import type { SubmitEvent } from 'react';
 
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'sign-in' | 'sign-up';
 
 export function AuthPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { signIn, signUp } = useUserContext();
   const [loginKey, setLoginKey] = useState('');
   const [username, setUsername] = useState('');
   const [createdLoginKey, setCreatedLoginKey] = useState('');
@@ -18,7 +17,7 @@ export function AuthPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const mode: AuthMode = useMemo(
-    () => (location.pathname === '/signup' ? 'signup' : 'login'),
+    () => (location.pathname === '/sign-up' ? 'sign-up' : 'sign-in'),
     [location.pathname],
   );
 
@@ -29,17 +28,17 @@ export function AuthPage() {
     setSubmitting(true);
 
     try {
-      if (mode === 'login') {
-        await signIn({ loginKey });
+      if (mode === 'sign-in') {
+        await authService.signIn({ loginKey });
         navigate('/chat', { replace: true });
         return;
       }
 
-      const response = await signUp({ username });
+      const response = await authService.signUp({ username });
       setCreatedLoginKey(response.loginKey);
     } catch (error: unknown) {
       console.log(error);
-      setError(mode === 'login' ? 'Invalid login key' : 'Could not create user');
+      setError(mode === 'sign-in' ? 'Invalid login key' : 'Could not create user');
     } finally {
       setSubmitting(false);
     }
@@ -52,9 +51,9 @@ export function AuthPage() {
           <div className='mx-auto mb-4 grid size-14 place-items-center rounded-full bg-accent text-lg font-semibold text-white'>
             <img src={Logo} alt='App logo' className='h-full w-full rounded-full' />
           </div>
-          <h1 className='text-2xl font-semibold'>{mode === 'login' ? 'Sign in' : 'Sign up'}</h1>
+          <h1 className='text-2xl font-semibold'>{mode === 'sign-in' ? 'Sign in' : 'Sign up'}</h1>
           <p className='mt-2 text-sm text-text-secondary'>
-            {mode === 'login'
+            {mode === 'sign-in'
               ? 'Use your login key to enter the chat.'
               : 'Create a username and save your login key.'}
           </p>
@@ -64,29 +63,29 @@ export function AuthPage() {
           <Link
             className={[
               'rounded-md px-3 py-2 text-center transition',
-              mode === 'login'
+              mode === 'sign-in'
                 ? 'bg-white text-text-primary shadow-sm'
                 : 'text-text-secondary hover:text-text-primary',
             ].join(' ')}
-            to='/login'
+            to='/sign-in'
           >
             Sign in
           </Link>
           <Link
             className={[
               'rounded-md px-3 py-2 text-center transition',
-              mode === 'signup'
+              mode === 'sign-up'
                 ? 'bg-white text-text-primary shadow-sm'
                 : 'text-text-secondary hover:text-text-primary',
             ].join(' ')}
-            to='/signup'
+            to='/sign-up'
           >
             Sign up
           </Link>
         </div>
 
         <form className='space-y-4' onSubmit={handleSubmit}>
-          {mode === 'login' ? (
+          {mode === 'sign-in' ? (
             <label className='block'>
               <span className='mb-2 block text-sm font-medium text-text-primary'>Login key</span>
               <input
@@ -125,10 +124,10 @@ export function AuthPage() {
             disabled={submitting}
           >
             {submitting
-              ? mode === 'login'
+              ? mode === 'sign-in'
                 ? 'Signing in...'
                 : 'Creating account...'
-              : mode === 'login'
+              : mode === 'sign-in'
                 ? 'Sign in'
                 : 'Create account'}
           </button>

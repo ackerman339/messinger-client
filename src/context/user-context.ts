@@ -1,13 +1,10 @@
 import { createContext, useContext } from 'react';
 
 import type { User } from '../types/user';
-import type { SignInDto, SignUpDto } from '../services/auth';
 
 interface UserContextValue {
   user: User | null;
   loading: boolean;
-  signIn: (data: SignInDto) => Promise<void>;
-  signUp: (data: SignUpDto) => Promise<{ loginKey: string }>;
   logout: () => Promise<void>;
 }
 

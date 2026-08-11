@@ -12,10 +12,10 @@ httpClient.interceptors.response.use(
 
     if (status === 401) {
       const isOnAuthPage =
-        window.location.pathname === '/signin' || window.location.pathname === '/signup';
+        window.location.pathname === '/sign-in' || window.location.pathname === '/sign-up';
 
       if (!isOnAuthPage) {
-        window.location.href = '/signin';
+        window.location.href = '/sign-in';
       }
     }
 

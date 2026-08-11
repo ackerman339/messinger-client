@@ -4,7 +4,6 @@ import { connect, disconnect } from '../clients/websocket-client';
 import { UserContext } from '../context/user-context';
 
 import type { ReactNode } from 'react';
-import type { SignInDto, SignUpDto } from '../services/auth';
 import type { User } from '../types/user';
 
 export function UserProvider({ children }: { children: ReactNode }) {
@@ -28,26 +27,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     bootstrapSession();
   }, []);
 
-  const signIn = async (data: SignInDto) => {
-    const user = await authService.signIn(data);
-    setUser(user);
-    connect(import.meta.env.VITE_WEB_SOCKET_URL);
-  };
-
-  const signUp = async (data: SignUpDto) => {
-    const response = await authService.signUp(data);
-    return response;
-  };
-
   const logout = async () => {
     await authService.logout();
     disconnect();
     setUser(null);
   };
 
-  return (
-    <UserContext.Provider value={{ user, loading, signIn, signUp, logout }}>
-      {children}
-    </UserContext.Provider>
-  );
+  return <UserContext.Provider value={{ user, loading, logout }}>{children}</UserContext.Provider>;
 }
