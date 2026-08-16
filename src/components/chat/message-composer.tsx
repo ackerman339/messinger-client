@@ -71,18 +71,18 @@ export function MessageComposer() {
   }
 
   return (
-    <footer className='sticky bottom-0 z-10 border-t border-border bg-bg-app px-4 py-3'>
-      <form
-        className='mx-auto grid max-w-4xl grid-cols-[auto_1fr_auto_auto_auto] items-end gap-2'
-        onSubmit={handleSubmit}
-      >
-        <Tooltip.Provider delayDuration={150}>
+    <Tooltip.Provider delayDuration={150}>
+      <footer className='grid min-h-20 max-h-80 grid-cols-[auto_1fr_auto] gap-x-1 shrink-0 border-t border-border bg-bg-app px-2 py-3'>
+        <div className='self-end flex'>
           <AttachmentMenu disabled={disabled} onFilesSelected={uploadFiles} />
-          <label className='min-h-11 rounded-xl bg-slate-100 px-4 py-2.5'>
+          <ComposerButton label='Emoji' icon={<Smile />} disabled={disabled} />
+        </div>
+        <form className='self-center' onSubmit={handleSubmit}>
+          <div className='rounded-xl bg-slate-100 px-4 py-2.5'>
             <span className='sr-only'>Escribe un mensaje</span>
             <textarea
               ref={textareaRef}
-              className='max-h-32 min-h-6 w-full resize-none bg-transparent text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
+              className='block w-full resize-none bg-transparent text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
               placeholder='Escribe un mensaje'
               rows={1}
               disabled={disabled}
@@ -96,21 +96,25 @@ export function MessageComposer() {
                 }
               }}
             />
-          </label>
-          <VoiceRecorder />
-          <ComposerButton label='Emoji' icon={<Smile />} disabled={disabled} />
-          <button
-            className='grid size-11 place-items-center rounded-full bg-accent text-xl text-white transition hover:bg-accent-hover disabled:opacity-40'
-            type='submit'
-            aria-label='enviar mensaje'
-            title='Enviar mensaje'
-            disabled={disabled || !message.trim()}
-          >
-            <ChevronRight />
-          </button>
-        </Tooltip.Provider>
-      </form>
-    </footer>
+          </div>
+        </form>
+        <div className='self-end flex'>
+          {message ? (
+            <button
+              className='grid size-11 place-items-center rounded-full bg-accent text-xl text-white transition hover:bg-accent-hover disabled:opacity-40'
+              type='submit'
+              aria-label='enviar mensaje'
+              title='Enviar mensaje'
+              disabled={disabled || !message.trim()}
+            >
+              <ChevronRight />
+            </button>
+          ) : (
+            <VoiceRecorder />
+          )}
+        </div>
+      </footer>
+    </Tooltip.Provider>
   );
 }
 

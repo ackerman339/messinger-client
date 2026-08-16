@@ -25,7 +25,7 @@ export function ChatHeader() {
       : privateConversationMember.username;
 
   return (
-    <header className='sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
+    <header className='flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
       <div className='flex min-w-0 items-center gap-3'>
         <div className='block lg:hidden size-10 bg-none rounded-full'>
           <button

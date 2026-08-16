@@ -4,7 +4,6 @@ import { ChatHeader } from './chat-header';
 import { ConversationList } from './conversation-list';
 import { MessageComposer } from './message-composer';
 import { MessageList } from './message-list';
-import { TypingBar } from './typing-bar';
 
 export function ChatLayout() {
   const { activeConversation } = useChatContext();
@@ -16,12 +15,11 @@ export function ChatLayout() {
         {!activeConversation ? (
           <ConversationList />
         ) : (
-          <div className='min-h-screen grid grid-rows-[auto_1fr_auto]'>
+          <section className='flex flex-col h-screen bg-bg-chat'>
             <ChatHeader />
             <MessageList />
-            <TypingBar />
             <MessageComposer />
-          </div>
+          </section>
         )}
       </div>
       <div className='hidden lg:grid h-screen grid-cols-1 overflow-hidden bg-bg-app md:grid-cols-[360px_1fr] lg:grid-cols-[400px_1fr]'>
@@ -34,10 +32,9 @@ export function ChatLayout() {
             </p>
           </section>
         ) : (
-          <section className='grid min-h-0 grid-rows-[auto_1fr_auto_auto] bg-bg-chat'>
+          <section className='flex flex-col h-screen bg-bg-chat'>
             <ChatHeader />
             <MessageList />
-            <TypingBar />
             <MessageComposer />
           </section>
         )}
