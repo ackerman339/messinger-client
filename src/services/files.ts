@@ -15,8 +15,9 @@ type DownloadResponse = {
 export const fileService = {
   // R2 related service
   uploadFile: (file: File, url: string) =>
-    httpClient.put(url, file, {
-      withCredentials: false,
+    fetch(url, {
+      method: 'PUT',
+      body: file,
       headers: {
         'Content-Type': file.type,
       },
