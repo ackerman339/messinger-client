@@ -1,55 +1,205 @@
-import { useRef, useEffect, useMemo, useState } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ScrollArea } from 'radix-ui';
 import { fileService } from '@services/files';
+import { conversationService } from '@/services/conversation';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
+import { useCursorPagination } from '@/hooks/use-cursor-pagination';
+import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
+
 import type { Message } from '@/types/conversation';
 
 export function MessageList() {
   const { activeConversation } = useChatContext();
 
-  const loading = false;
-  const error = null;
-  const hasConversation = !activeConversation;
+  const hasConversation = !!activeConversation;
 
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const messages: Message[] = useMemo(
-    () => activeConversation?.messages || [],
-    [activeConversation],
-  );
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: 'instant',
-      block: 'end',
-    });
+  /**
+   * Stores the scroll height before loading older messages.
+   */
+  const previousScrollHeightRef = useRef<number | null>(null);
+
+  /**
+   * Tracks whether the initial page is still being laid out.
+   */
+  const isInitialLoadRef = useRef(true);
+
+  /**
+   * Prevents the scroll compensation from running
+   * when the initial page is loaded.
+   */
+  const isLoadingMoreRef = useRef(false);
+
+  const { items, isLoading, hasMore, loadMore } = useCursorPagination<Message>({
+    fetchPage: (cursor) =>
+      conversationService.getMessages(activeConversation!.id, {
+        cursor,
+        limit: 20,
+      }),
+    reverse: true,
+    deps: [activeConversation?.id],
   });
 
+  /**
+   * Scroll the container to the bottom.
+   */
+  const scrollToBottom = useCallback(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    container.scrollTop = container.scrollHeight;
+  }, []);
+
+  /**
+   * Load the next page of older messages.
+   *
+   * Save the current scroll height before loading so
+   * the scroll position can be restored afterwards.
+   */
+  const handleLoadMore = useCallback(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    if (isLoadingMoreRef.current) {
+      return;
+    }
+
+    if (!hasMore) {
+      return;
+    }
+
+    if (isLoading) {
+      return;
+    }
+
+    isLoadingMoreRef.current = true;
+
+    previousScrollHeightRef.current = container.scrollHeight;
+
+    loadMore();
+  }, [hasMore, isLoading, loadMore]);
+
+  const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
+    onIntersect: handleLoadMore,
+    enabled: hasMore && !isLoading,
+    rootRef: containerRef,
+    rootMargin: '10px',
+  });
+
+  /**
+   * Reset the scroll state when the conversation changes.
+   */
+  useEffect(() => {
+    isInitialLoadRef.current = true;
+    isLoadingMoreRef.current = false;
+    previousScrollHeightRef.current = null;
+
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+  }, [activeConversation?.id]);
+
+  /**
+   * Preserve the user's visual scroll position after
+   * older messages have been inserted at the top.
+   */
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const previousScrollHeight = previousScrollHeightRef.current;
+
+    if (previousScrollHeight === null) {
+      return;
+    }
+
+    const newScrollHeight = container.scrollHeight;
+
+    const heightDifference = newScrollHeight - previousScrollHeight;
+
+    container.scrollTop += heightDifference;
+
+    previousScrollHeightRef.current = null;
+    isLoadingMoreRef.current = false;
+  }, [items]);
+
+  /**
+   * Keep the scroll at the bottom while the initial
+   * messages are still changing their height.
+   *
+   * This is useful when message attachments, audio,
+   * fonts, or other content changes the layout after
+   * the first render.
+   */
+  useLayoutEffect(() => {
+    if (!isInitialLoadRef.current) {
+      return;
+    }
+
+    if (items.length === 0) {
+      return;
+    }
+
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      scrollToBottom();
+    });
+
+    observer.observe(container);
+
+    const frame1 = requestAnimationFrame(() => {
+      scrollToBottom();
+    });
+
+    const timeout = window.setTimeout(() => {
+      scrollToBottom();
+
+      isInitialLoadRef.current = false;
+
+      observer.disconnect();
+    }, 150);
+
+    return () => {
+      cancelAnimationFrame(frame1);
+      window.clearTimeout(timeout);
+      observer.disconnect();
+    };
+  }, [items, scrollToBottom]);
+
   return (
-    <ScrollArea.Root className='chat-paper min-h-0'>
-      <ScrollArea.Viewport className='h-full'>
-        <div className='mx-auto flex min-h-full w-full max-w-4xl flex-col gap-2 px-4 pt-6 sm:px-6 lg:px-8'>
-          {hasConversation && <EmptyState label='Selecciona una conversación' />}
-          {hasConversation && loading ? <EmptyState label='Cargando mensajes...' /> : null}
-          {hasConversation && !loading && messages.length === 0 ? (
-            <EmptyState label='No hay mensaje todavía' />
-          ) : null}
-          {error ? <EmptyState label={error} /> : null}
-          {messages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
-        </div>
-        {<div className='h-1 mt-20' ref={bottomRef} />}
-      </ScrollArea.Viewport>
-      <ScrollArea.Scrollbar
-        className='flex w-2 touch-none bg-transparent p-0.5'
-        orientation='vertical'
-      >
-        <ScrollArea.Thumb className='flex-1 rounded-full bg-slate-400/70' />
-      </ScrollArea.Scrollbar>
-    </ScrollArea.Root>
+    <div
+      ref={containerRef}
+      className='chat-paper flex h-[calc(100vh-80px-64px)] max-h-[calc(100vh-80px-64px)] flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
+    >
+      <div ref={sentinelRef} className='h-1 min-h-1 shrink-0' />
+
+      {!hasConversation && <EmptyState label='Selecciona una conversación' />}
+
+      {hasConversation && items.length === 0 && !isLoading && (
+        <EmptyState label='No hay mensaje todavía' />
+      )}
+
+      {items.map((message) => (
+        <MessageBubble key={message.id} message={message} />
+      ))}
+    </div>
   );
 }
 
@@ -59,7 +209,9 @@ type MessageBubbleProps = {
 
 function MessageBubble({ message }: MessageBubbleProps) {
   const { user } = useUserContext();
+
   const [downloads, setDownloads] = useState<Map<string, string>>(new Map());
+
   const isOwn = message.senderId === user?.id;
 
   useEffect(() => {
@@ -67,18 +219,41 @@ function MessageBubble({ message }: MessageBubbleProps) {
       return;
     }
 
-    const downloads: { id: string; url: string }[] = [];
+    let cancelled = false;
 
     async function getDownloadUrls() {
+      const downloads: {
+        id: string;
+        url: string;
+      }[] = [];
+
       for (const attachment of message.attachments) {
-        const result = await fileService.downloadFile({ attachmentId: attachment.id });
-        downloads.push({ id: attachment.id, url: result.url });
+        const result = await fileService.downloadFile({
+          attachmentId: attachment.id,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        downloads.push({
+          id: attachment.id,
+          url: result.url,
+        });
+      }
+
+      if (cancelled) {
+        return;
       }
 
       setDownloads(new Map(downloads.map((download) => [download.id, download.url])));
     }
 
     getDownloadUrls();
+
+    return () => {
+      cancelled = true;
+    };
   }, [message]);
 
   return (
@@ -89,17 +264,18 @@ function MessageBubble({ message }: MessageBubbleProps) {
           isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
         ].join(' ')}
       >
-        {/*    {!isOwn && message.senderName ? (
-          <p className='mb-1 text-sm font-semibold text-accent'>{message.senderName}</p>
-        ) : null} */}
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
           {message.content}
         </p>
+
         {message.attachments?.length > 0 && (
           <ul className='my-2 space-y-2'>
             {message.attachments.map((attachment) => {
               const url = downloads.get(attachment.id);
-              if (!url) return null;
+
+              if (!url) {
+                return null;
+              }
 
               if (attachment.contentType.startsWith('audio/')) {
                 return (
@@ -111,7 +287,11 @@ function MessageBubble({ message }: MessageBubbleProps) {
 
               return (
                 <li key={attachment.id} className='text-accent'>
-                  <a href={url} download={attachment.fileName} className='hover:underline'>
+                  <a
+                    href={url}
+                    download={attachment.fileName}
+                    className='hover:underline wrap-break-word'
+                  >
                     {attachment.fileName}
                   </a>
                 </li>
@@ -119,12 +299,14 @@ function MessageBubble({ message }: MessageBubbleProps) {
             })}
           </ul>
         )}
+
         <div className='mt-1 flex items-center justify-end gap-1 text-[11px] text-text-secondary'>
           <time>
             {format(new Date(message.createdAt), 'dd MMM HH:mm', {
               locale: es,
             })}
           </time>
+
           {isOwn ? <span className='text-accent'>✓✓</span> : null}
         </div>
       </div>

@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react';
 import { conversationService } from '@services/conversation';
 import { fileService } from '@services/files';
@@ -7,6 +6,7 @@ import { wsClient } from '@clients/websocket-client';
 import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@/types/websocket';
 import { useUserContext } from '@context/user-context';
 import { ChatContext } from '@context/chat-context';
+import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 
 import type { ReactNode } from 'react';
 import type { Conversation } from '../types/conversation';
@@ -18,11 +18,49 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Map<string, Conversation>>(new Map());
   const [activeConversationId, setActiveConversationId] = useState('');
   const [receiverId, setReceiverId] = useState('');
-
-  //const [reloadConvesations, setReloadConversations] = useState(false);
-  const [loadingConversations, setLoadingConversations] = useState(true);
   const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+
+  const { items, isLoading, hasMore, loadMore } = useCursorPagination<Conversation>({
+    fetchPage: (cursor) =>
+      conversationService.getBootstrap({
+        cursor,
+        limit: 20,
+      }),
+    deps: [],
+  });
+
+  /**
+   * Merge paginated conversations into the context map.
+   *
+   * Existing conversations have priority because they may
+   * contain newer data received through WebSocket events.
+   */
+  useEffect(() => {
+    if (items.length === 0) {
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setConversations((previous) => {
+      const next = new Map(previous);
+
+      for (const conversation of items) {
+        const existing = next.get(conversation.id);
+
+        next.set(
+          conversation.id,
+          existing
+            ? {
+                ...conversation,
+                ...existing,
+              }
+            : conversation,
+        );
+      }
+
+      return next;
+    });
+  }, [items]);
 
   useEffect(() => {
     const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
@@ -123,36 +161,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     };
   }, [user]);
 
-  useEffect(() => {
-    let ignore = false;
-    /*  if (!reloadConvesations) {
-      return;
-    } */
-
-    async function loadConversations() {
-      try {
-        setError(null);
-        const conversations = await conversationService.getBootstrap();
-        if (ignore) return;
-        setConversations(
-          new Map(
-            conversations.map((conversation: Conversation) => [conversation.id, conversation]),
-          ),
-        );
-      } catch {
-        if (!ignore) setError('Could not load conversations');
-      } finally {
-        if (!ignore) setLoadingConversations(false);
-      }
-    }
-
-    loadConversations();
-
-    return () => {
-      ignore = true;
-    };
-  }, []);
-
   const activeConversation = useMemo(
     () => conversations.get(activeConversationId) || null,
     [conversations, activeConversationId],
@@ -185,7 +193,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const result = await fileService.processUpload({ files: mappedFiles });
     const uploadItems = result.presignedUrls;
-    const attachments = result.pendingUploads.map((item: any) => {
+    const attachments = result.pendingUploads.map((item) => {
       return {
         id: item.id,
         fileName: item.fileName,
@@ -255,9 +263,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversations,
         activeConversation,
         typingUserIds,
-        loadingConversations,
-        error,
+        loadingConversations: isLoading,
+        error: null,
         receiverId,
+        hasMoreConversations: hasMore,
         handleTypingStart,
         handleTypingStop,
         handleSendMessage,
@@ -266,6 +275,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         getUserByCode,
         handleReceiverId,
         unSetCurrentConversation,
+        loadMoreConversations: loadMore,
       }}
     >
       {children}

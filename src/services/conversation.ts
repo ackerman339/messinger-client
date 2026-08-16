@@ -1,7 +1,7 @@
 import { httpClient } from '@/clients/http-client';
 
-import type { Conversation } from '@/types/conversation';
-import type { ApiResponse } from '@/types/services-response';
+import type { Conversation, Message } from '@/types/conversation';
+import type { ApiResponse, Pagination, PaginationParams } from '@/types/services-response';
 export interface CreateGroupDto {
   name: string;
   members: string[]; // user UUIDs
@@ -25,20 +25,23 @@ export interface DeleteConversationDto {
   conversationId: string;
 }
 
-export interface GetConversationMessagesDto {
-  conversationId: string;
-  cursor?: string;
-  limit?: number; // defaults to 30 on the server, max 50
-}
-
 export const conversationService = {
-  getBootstrap: async () => {
-    const response = await httpClient.get<ApiResponse<Conversation[]>>('/conversation-list');
+  getBootstrap: async (params: PaginationParams) => {
+    const response = await httpClient.get<ApiResponse<Pagination<Conversation>>>(
+      '/conversation-list',
+      { params },
+    );
     return response.data.result;
   },
 
-  getMessages: (params: GetConversationMessagesDto) =>
-    httpClient.get('/conversation/messages', { params }),
+  getMessages: async (conversationId: string, params: PaginationParams) => {
+    const response = await httpClient.get<ApiResponse<Pagination<Message>>>(
+      '/conversation/messages',
+      { params: { ...params, conversationId } },
+    );
+
+    return response.data.result;
+  },
 
   // TODO: type responses
   createGroup: (data: CreateGroupDto) => httpClient.post('/conversation/create-group', data),

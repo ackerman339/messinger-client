@@ -1,15 +1,31 @@
+import { useRef } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { Avatar, ScrollArea } from 'radix-ui';
+import { Avatar } from 'radix-ui';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { ChatMenu } from './chat-menu';
+import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
 
 import type { Conversation } from '@/types/conversation';
 
 export function ConversationList() {
-  const { conversations, activeConversation, loadingConversations, handleCurrentConversation } =
-    useChatContext();
+  const {
+    conversations,
+    activeConversation,
+    loadingConversations,
+    hasMoreConversations,
+    handleCurrentConversation,
+    loadMoreConversations,
+  } = useChatContext();
+
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
+    onIntersect: loadMoreConversations,
+    enabled: hasMoreConversations && !loadingConversations,
+    rootRef: viewportRef,
+    rootMargin: '10px',
+  });
 
   const conversationsItems = [...conversations.values()].sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
@@ -17,7 +33,7 @@ export function ConversationList() {
 
   return (
     <aside className='min-h-full border-r border-border bg-bg-sidebar md:grid md:grid-rows-[auto_1fr]'>
-      <header className='border-b border-border px-4 py-3'>
+      <header className='h-16 border-b border-border px-4 py-3'>
         <div className='flex items-center gap-3'>
           <ChatMenu />
           <label className='flex h-10 flex-1 items-center rounded-full bg-slate-100 px-4 text-sm text-text-secondary'>
@@ -31,31 +47,22 @@ export function ConversationList() {
         </div>
       </header>
 
-      <ScrollArea.Root className='min-h-0 overflow-hidden'>
-        <ScrollArea.Viewport className='h-full'>
-          <div className='p-2'>
-            {loadingConversations ? <ListState label='Cargando conversaciones...' /> : null}
-            {!loadingConversations && conversations.size === 0 ? (
-              <ListState label='No tienes conversaciones aún' />
-            ) : (
-              conversationsItems.map((conversation) => (
-                <ConversationRow
-                  conversation={conversation}
-                  isActive={conversation.id === activeConversation?.id}
-                  key={conversation.id}
-                  onSelect={() => handleCurrentConversation(conversation.id)}
-                />
-              ))
-            )}
-          </div>
-        </ScrollArea.Viewport>
-        <ScrollArea.Scrollbar
-          className='flex w-2 touch-none bg-transparent p-0.5'
-          orientation='vertical'
-        >
-          <ScrollArea.Thumb className='flex-1 rounded-full bg-slate-300' />
-        </ScrollArea.Scrollbar>
-      </ScrollArea.Root>
+      <div className='h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-y-auto p-2'>
+        {loadingConversations && <ListState label='Cargando conversaciones...' />}
+        {!loadingConversations && conversations.size === 0 ? (
+          <ListState label='No tienes conversaciones aún' />
+        ) : (
+          conversationsItems.map((conversation) => (
+            <ConversationRow
+              conversation={conversation}
+              isActive={conversation.id === activeConversation?.id}
+              key={conversation.id}
+              onSelect={() => handleCurrentConversation(conversation.id)}
+            />
+          ))
+        )}
+        <div ref={sentinelRef}></div>
+      </div>
     </aside>
   );
 }

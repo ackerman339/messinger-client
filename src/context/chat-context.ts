@@ -12,6 +12,7 @@ export type ChatContextValue = {
   loadingConversations: boolean;
   error: string | null;
   receiverId: string;
+  hasMoreConversations: boolean;
   handleTypingStart: () => void;
   handleTypingStop: () => void;
   handleSendMessage: (content: string, attachments: FileAttachment[]) => void;
@@ -20,6 +21,7 @@ export type ChatContextValue = {
   getUserByCode: (userCode: string) => Promise<Response>;
   handleReceiverId: (id: string) => void;
   unSetCurrentConversation: () => void;
+  loadMoreConversations: () => void;
 };
 
 export const ChatContext = createContext<ChatContextValue>({
@@ -29,6 +31,7 @@ export const ChatContext = createContext<ChatContextValue>({
   loadingConversations: false,
   error: null,
   receiverId: '',
+  hasMoreConversations: false,
   handleTypingStart: () => {},
   handleTypingStop: () => {},
   handleSendMessage: () => {},
@@ -37,6 +40,7 @@ export const ChatContext = createContext<ChatContextValue>({
   getUserByCode: async () => ({}) as User,
   handleReceiverId: () => {},
   unSetCurrentConversation: () => {},
+  loadMoreConversations: () => {},
 });
 
 export function useChatContext() {
