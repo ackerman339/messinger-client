@@ -37,5 +37,10 @@
     "typescript-eslint": "^8.65.0",
     "vite": "^8.2.0",
     "vite-plugin-pwa": "^1.3.0"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "emoji-picker-react@4.19.1": "patches/emoji-picker-react@4.19.1.patch"
+    }
   }
 }

@@ -6,7 +6,7 @@ import { VoiceRecorder } from '@components/chat/voice-recorder';
 import { AttachmentMenu } from './attachment-menu';
 
 import EmojiPicker from 'emoji-picker-react';
-import es from 'emoji-picker-react/dist/data/emojis-es';
+import es from 'emoji-picker-react/dist/data/emojis-es.js';
 
 import type { EmojiClickData } from 'emoji-picker-react';
 import type { ReactNode, SubmitEvent } from 'react';
