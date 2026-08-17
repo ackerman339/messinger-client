@@ -25,6 +25,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     bootstrapSession();
+
+    return () => {
+      disconnect();
+    };
   }, []);
 
   const logout = async () => {
