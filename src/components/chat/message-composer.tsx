@@ -50,6 +50,16 @@ export function MessageComposer() {
     setEmojiPickerOpen(false);
   }
 
+  function handleClick() {
+    const content = message.trim();
+
+    if (!content) return;
+
+    handleSendMessage(content, []);
+    setMessage('');
+    setEmojiPickerOpen(false);
+  }
+
   function handleEmojiClick(emojiData: EmojiClickData) {
     const textarea = textareaRef.current;
 
@@ -127,10 +137,10 @@ export function MessageComposer() {
           {message ? (
             <button
               className='grid size-11 place-items-center rounded-full bg-accent text-xl text-white transition hover:bg-accent-hover disabled:opacity-40'
-              type='submit'
               aria-label='enviar mensaje'
               title='Enviar mensaje'
               disabled={disabled || !message.trim()}
+              onClick={handleClick}
             >
               <ChevronRight />
             </button>
