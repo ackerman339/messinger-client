@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { conversationService } from '@services/conversation';
 import { fileService } from '@services/files';
 import { userService } from '@services/user';
@@ -14,6 +15,9 @@ import type { FileAttachment, UploadContentType } from '../types/file';
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user } = useUserContext();
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const conversationId = searchParams.get('conversationId');
 
   const [conversations, setConversations] = useState<Map<string, Conversation>>(new Map());
   const [activeConversationId, setActiveConversationId] = useState('');
@@ -60,6 +64,18 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, [items]);
+
+  useEffect(() => {
+    if (!conversationId) {
+      return;
+    }
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActiveConversationId(conversationId);
+
+    searchParams.delete('conversationId');
+    setSearchParams(searchParams, { replace: true });
+  }, [conversationId, searchParams, setSearchParams]);
 
   const activeConversation = useMemo(
     () => conversations.get(activeConversationId) || null,
