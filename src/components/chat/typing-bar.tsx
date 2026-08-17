@@ -1,8 +1,8 @@
-import { useChatContext } from '@context/chat-context';
+//import { useChatContext } from '@context/chat-context';
 
 export function TypingBar() {
-  const { typingUserIds } = useChatContext();
-
+  //const { typingUserIds } = useChatContext();
+  const typingUserIds = [];
   if (typingUserIds.length === 0) {
     return null;
   }
