@@ -8,6 +8,7 @@ export type Member = {
 
 export type Message = {
   id: string;
+  messageId: string;
   conversationId: string;
   senderId: string;
   content: string;

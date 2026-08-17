@@ -3,7 +3,7 @@ import { conversationService } from '@services/conversation';
 import { fileService } from '@services/files';
 import { userService } from '@services/user';
 import { wsClient } from '@clients/websocket-client';
-import { WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '@/types/websocket';
+import { WS_CLIENT_EVENTS } from '@/types/websocket';
 import { useUserContext } from '@context/user-context';
 import { ChatContext } from '@context/chat-context';
 import { useCursorPagination } from '@/hooks/use-cursor-pagination';
@@ -18,7 +18,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Map<string, Conversation>>(new Map());
   const [activeConversationId, setActiveConversationId] = useState('');
   const [receiverId, setReceiverId] = useState('');
-  const [typingUserIds, setTypingUserIds] = useState<string[]>([]);
 
   const { items, isLoading, hasMore, loadMore } = useCursorPagination<Conversation>({
     fetchPage: (cursor) =>
@@ -61,105 +60,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, [items]);
-
-  useEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-      setConversations((prev) => {
-        if (!message.conversation) {
-          return prev;
-        }
-
-        const nextMap = new Map(prev);
-        const conversation = nextMap.get(message.conversation.id);
-        const existingMessages = conversation?.messages ?? [];
-        const fallbackCreatedAt = new Date(message.conversation.createdAt ?? message.createdAt);
-        const fallbackUpdatedAt = new Date(message.conversation.updatedAt ?? message.createdAt);
-
-        nextMap.set(message.conversation.id, {
-          ...(conversation ?? {
-            id: message.conversation.id,
-            type: 'PRIVATE',
-            name: 'Nueva Conversacion',
-            members: message.conversation.members.filter((member) => member.id !== user?.id),
-            messagesCursor: null,
-            createdAt: fallbackCreatedAt,
-            updatedAt: fallbackUpdatedAt,
-          }),
-          messages: [
-            ...existingMessages,
-            {
-              id: message.messageId,
-              conversationId: message.conversation.id,
-              senderId: message.senderId,
-              content: message.content,
-              createdAt: message.createdAt,
-              type: 'MESSAGE',
-              attachments: message.attachments,
-            },
-          ],
-        });
-
-        return nextMap;
-      });
-    });
-
-    const unsubscribeSentMessage = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
-      setConversations((prev) => {
-        if (!message.conversation) {
-          return prev;
-        }
-
-        const nextMap = new Map(prev);
-        const conversation = nextMap.get(message.conversation.id);
-        const existingMessages = conversation?.messages ?? [];
-        const fallbackCreatedAt = new Date(message.conversation.createdAt ?? message.createdAt);
-        const fallbackUpdatedAt = new Date(message.conversation.updatedAt ?? message.createdAt);
-
-        nextMap.set(message.conversation.id, {
-          ...(conversation ?? {
-            id: message.conversation.id,
-            type: 'PRIVATE',
-            name: 'Nueva Conversacion',
-            members: message.conversation.members.filter((member) => member.id !== user?.id),
-            messagesCursor: null,
-            createdAt: fallbackCreatedAt,
-            updatedAt: fallbackUpdatedAt,
-          }),
-          messages: [
-            ...existingMessages,
-            {
-              id: message.messageId,
-              conversationId: message.conversation.id,
-              senderId: message.senderId,
-              content: message.content,
-              createdAt: message.createdAt,
-              type: 'MESSAGE',
-              attachments: message.attachments,
-            },
-          ],
-        });
-
-        return nextMap;
-      });
-    });
-
-    const unsubscribeTypingStarted = wsClient.on(WS_SERVER_EVENTS.TYPING_STARTED, (event) => {
-      setTypingUserIds((current) =>
-        current.includes(event.userId) ? current : [...current, event.userId],
-      );
-    });
-
-    const unsubscribeTypingStopped = wsClient.on(WS_SERVER_EVENTS.TYPING_STOPPED, (event) => {
-      setTypingUserIds((current) => current.filter((userId) => userId !== event.userId));
-    });
-
-    return () => {
-      unsubscribeNewMessage();
-      unsubscribeTypingStarted();
-      unsubscribeTypingStopped();
-      unsubscribeSentMessage();
-    };
-  }, [user]);
 
   const activeConversation = useMemo(
     () => conversations.get(activeConversationId) || null,
@@ -219,20 +119,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return attachments;
   }
 
-  function handleTypingStart() {
-    if (!activeConversationId) return;
-    wsClient.emit(WS_CLIENT_EVENTS.TYPING_START, {
-      conversationId: activeConversationId,
-    });
-  }
-
-  function handleTypingStop() {
-    if (!activeConversationId) return;
-    wsClient.emit(WS_CLIENT_EVENTS.TYPING_STOP, {
-      conversationId: activeConversationId,
-    });
-  }
-
   function handleSendMessage(content: string, attachments: FileAttachment[] = []) {
     if (activeConversation && activeConversation.type === 'GROUP') {
       wsClient.emit(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, {
@@ -262,13 +148,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       value={{
         conversations,
         activeConversation,
-        typingUserIds,
         loadingConversations: isLoading,
         error: null,
         receiverId,
         hasMoreConversations: hasMore,
-        handleTypingStart,
-        handleTypingStop,
         handleSendMessage,
         handleCurrentConversation,
         prepareAttachments,

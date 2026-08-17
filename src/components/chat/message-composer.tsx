@@ -8,17 +8,10 @@ import { AttachmentMenu } from './attachment-menu';
 import type { ReactNode, SubmitEvent } from 'react';
 
 export function MessageComposer() {
-  const {
-    activeConversation,
-    receiverId,
-    handleTypingStop,
-    handleTypingStart,
-    prepareAttachments,
-    handleSendMessage,
-  } = useChatContext();
+  const { activeConversation, receiverId, prepareAttachments, handleSendMessage } =
+    useChatContext();
 
   const [message, setMessage] = useState('');
-  const typingTimeoutRef = useRef<number | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const disabled = !activeConversation && !receiverId;
@@ -32,26 +25,12 @@ export function MessageComposer() {
     textarea.style.height = `${Math.min(textarea.scrollHeight, 256)}px`;
   }, [message]);
 
-  function stopTypingSoon() {
-    if (typingTimeoutRef.current) {
-      window.clearTimeout(typingTimeoutRef.current);
-    }
-
-    typingTimeoutRef.current = window.setTimeout(() => {
-      handleTypingStop();
-    }, 700);
-  }
-
   function handleChange(value: string) {
     setMessage(value);
 
     if (!value.trim()) {
-      handleTypingStop();
       return;
     }
-
-    handleTypingStart();
-    stopTypingSoon();
   }
 
   function handleSubmit(event: SubmitEvent) {
@@ -62,7 +41,6 @@ export function MessageComposer() {
 
     handleSendMessage(content, []);
     setMessage('');
-    handleTypingStop();
   }
 
   async function uploadFiles(files: File[]) {
@@ -87,7 +65,6 @@ export function MessageComposer() {
               rows={1}
               disabled={disabled}
               value={message}
-              onBlur={handleTypingStop}
               onChange={(event) => handleChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {

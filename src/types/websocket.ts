@@ -1,5 +1,4 @@
-import type { FileAttachment } from './file';
-import type { Conversation } from './conversation';
+import type { Message } from './conversation';
 
 export const WS_CLIENT_EVENTS = {
   SEND_PRIVATE_MESSAGE: 'SEND_PRIVATE_MESSAGE',
@@ -109,22 +108,8 @@ export interface WsClientPayloads {
 
 // --- Data real que manda el SERVIDOR ---
 export interface WsServerPayloads {
-  [WS_SERVER_EVENTS.NEW_MESSAGE]: {
-    senderId: string;
-    messageId: string;
-    content: string;
-    createdAt: string;
-    conversation: Conversation;
-    attachments: FileAttachment[];
-  };
-  [WS_SERVER_EVENTS.MESSAGE_SENT]: {
-    senderId: string;
-    messageId: string;
-    content: string;
-    createdAt: string;
-    conversation: Conversation;
-    attachments: FileAttachment[];
-  };
+  [WS_SERVER_EVENTS.NEW_MESSAGE]: Message;
+  [WS_SERVER_EVENTS.MESSAGE_SENT]: Message;
   [WS_SERVER_EVENTS.MESSAGE_STATUS_UPDATED]: {
     messageId: string;
     userId: string;

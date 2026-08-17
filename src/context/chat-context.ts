@@ -8,13 +8,10 @@ import type { Response } from '@/services/user';
 export type ChatContextValue = {
   conversations: Map<string, Conversation>;
   activeConversation: Conversation | null;
-  typingUserIds: string[];
   loadingConversations: boolean;
   error: string | null;
   receiverId: string;
   hasMoreConversations: boolean;
-  handleTypingStart: () => void;
-  handleTypingStop: () => void;
   handleSendMessage: (content: string, attachments: FileAttachment[]) => void;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
@@ -27,13 +24,10 @@ export type ChatContextValue = {
 export const ChatContext = createContext<ChatContextValue>({
   conversations: new Map([]),
   activeConversation: null,
-  typingUserIds: [],
   loadingConversations: false,
   error: null,
   receiverId: '',
   hasMoreConversations: false,
-  handleTypingStart: () => {},
-  handleTypingStop: () => {},
   handleSendMessage: () => {},
   handleCurrentConversation: () => {},
   prepareAttachments: async () => [] as FileAttachment[],

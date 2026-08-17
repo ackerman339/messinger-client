@@ -1,6 +1,8 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { wsClient } from '@clients/websocket-client';
+import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { fileService } from '@services/files';
 import { conversationService } from '@/services/conversation';
 import { useUserContext } from '@context/user-context';
@@ -25,7 +27,7 @@ export function MessageList() {
   /**
    * Tracks whether the initial page is still being laid out.
    */
-  const isInitialLoadRef = useRef(true);
+  const enableScrollToBottom = useRef(true);
 
   /**
    * Prevents the scroll compensation from running
@@ -33,7 +35,7 @@ export function MessageList() {
    */
   const isLoadingMoreRef = useRef(false);
 
-  const { items, isLoading, hasMore, loadMore } = useCursorPagination<Message>({
+  const { items, isLoading, hasMore, loadMore, setItems } = useCursorPagination<Message>({
     fetchPage: (cursor) =>
       conversationService.getMessages(activeConversation!.id, {
         cursor,
@@ -42,19 +44,6 @@ export function MessageList() {
     reverse: true,
     deps: [activeConversation?.id],
   });
-
-  /**
-   * Scroll the container to the bottom.
-   */
-  const scrollToBottom = useCallback(() => {
-    const container = containerRef.current;
-
-    if (!container) {
-      return;
-    }
-
-    container.scrollTop = container.scrollHeight;
-  }, []);
 
   /**
    * Load the next page of older messages.
@@ -88,9 +77,40 @@ export function MessageList() {
     loadMore();
   }, [hasMore, isLoading, loadMore]);
 
+  /**
+   * Scroll the container to the bottom.
+   */
+  const scrollToBottom = useCallback(() => {
+    const container = containerRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    container.scrollTop = container.scrollHeight;
+  }, []);
+
+  useLayoutEffect(() => {
+    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
+      enableScrollToBottom.current = true;
+
+      setItems((prev) => [...prev, message]);
+    });
+
+    const unsubscribeSentMessage = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
+      enableScrollToBottom.current = true;
+      setItems((prev) => [...prev, message]);
+    });
+
+    return () => {
+      unsubscribeNewMessage();
+      unsubscribeSentMessage();
+    };
+  }, [items, setItems, scrollToBottom]);
+
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: handleLoadMore,
-    enabled: hasMore && !isLoading,
+    enabled: hasMore,
     rootRef: containerRef,
     rootMargin: '10px',
   });
@@ -99,7 +119,7 @@ export function MessageList() {
    * Reset the scroll state when the conversation changes.
    */
   useEffect(() => {
-    isInitialLoadRef.current = true;
+    enableScrollToBottom.current = true;
     isLoadingMoreRef.current = false;
     previousScrollHeightRef.current = null;
 
@@ -144,7 +164,7 @@ export function MessageList() {
    * the first render.
    */
   useLayoutEffect(() => {
-    if (!isInitialLoadRef.current) {
+    if (!enableScrollToBottom.current) {
       return;
     }
 
@@ -171,7 +191,7 @@ export function MessageList() {
     const timeout = window.setTimeout(() => {
       scrollToBottom();
 
-      isInitialLoadRef.current = false;
+      enableScrollToBottom.current = false;
 
       observer.disconnect();
     }, 150);
@@ -197,7 +217,7 @@ export function MessageList() {
       )}
 
       {items.map((message) => (
-        <MessageBubble key={message.id} message={message} />
+        <MessageBubble key={message.messageId} message={message} />
       ))}
     </div>
   );
