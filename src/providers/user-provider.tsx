@@ -15,6 +15,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function setupNotifications() {
+    // if you want to test notification in local set VITE_ENV=staging
+    // Then run pnpm build and pnpm preview
+    if (import.meta.env.VITE_ENV === 'development') {
+      return;
+    }
+
     try {
       await navigator.serviceWorker.ready;
       const permission = await requestNotificationPermission();
