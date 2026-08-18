@@ -37,6 +37,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   async function removeNotifications() {
+    // if you want to test notification in local set VITE_ENV=staging
+    // Then run pnpm build and pnpm preview
+    if (import.meta.env.VITE_ENV === 'development') {
+      return;
+    }
     try {
       const registration = await navigator.serviceWorker.ready;
       const subscription = await registration.pushManager.getSubscription();
