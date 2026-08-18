@@ -10,7 +10,8 @@ type NewMessageDialogProps = {
 };
 
 export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) {
-  const { getUserByCode, receiverId, handleReceiverId } = useChatContext();
+  const { getUserByCode, receiverId, handleReceiverId, unSetCurrentConversation } =
+    useChatContext();
 
   const [userCode, setUserCode] = useState('');
   const [loading, setLoading] = useState(false);
@@ -25,6 +26,7 @@ export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) 
 
       const user = await getUserByCode(userCode.trim());
       handleReceiverId(user.id);
+      unSetCurrentConversation();
     } catch {
       setError('No encontramos ese usuario');
     } finally {
