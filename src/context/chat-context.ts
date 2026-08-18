@@ -19,6 +19,7 @@ export type ChatContextValue = {
   handleReceiverId: (id: string) => void;
   unSetCurrentConversation: () => void;
   loadMoreConversations: () => void;
+  handleNewConversation: (conversation: Conversation) => void;
 };
 
 export const ChatContext = createContext<ChatContextValue>({
@@ -35,6 +36,7 @@ export const ChatContext = createContext<ChatContextValue>({
   handleReceiverId: () => {},
   unSetCurrentConversation: () => {},
   loadMoreConversations: () => {},
+  handleNewConversation: () => {},
 });
 
 export function useChatContext() {

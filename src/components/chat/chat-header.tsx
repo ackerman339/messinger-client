@@ -16,7 +16,7 @@ export function ChatHeader() {
   }
 
   const privateConversationMember = activeConversation?.members.filter(
-    (member) => member.id !== user?.id,
+    (member) => member.userId !== user?.id,
   )[0];
 
   const title =

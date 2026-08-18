@@ -276,10 +276,6 @@ type MessageBubbleProps = {
 };
 
 function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
-  if (selected) {
-    console.log('BUBBLE', message.messageId, selected);
-  }
-
   const { user } = useUserContext();
   const [downloads, setDownloads] = useState<Map<string, string>>(new Map());
 

@@ -94,6 +94,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setReceiverId(id);
   }
 
+  function handleNewConversation(conversation: Conversation) {
+    setConversations((previous) => {
+      const next = new Map(previous);
+      next.set(conversation.id, conversation);
+
+      return next;
+    });
+  }
+
   async function getUserByCode(userCode: string) {
     const response = await userService.getUserByCode({ userCode });
 
@@ -146,7 +155,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
 
     const targetReceiverId =
-      receiverId || activeConversation?.members.filter((member) => member.id !== user?.id)[0].id;
+      receiverId ||
+      activeConversation?.members.filter((member) => member.userId !== user?.id)[0].userId;
 
     if (!targetReceiverId) {
       return;
@@ -175,6 +185,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         handleReceiverId,
         unSetCurrentConversation,
         loadMoreConversations: loadMore,
+        handleNewConversation,
       }}
     >
       {children}

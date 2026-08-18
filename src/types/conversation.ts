@@ -1,15 +1,16 @@
 import type { FileAttachment } from './file';
 
 export type Member = {
-  id: string;
+  userId: string;
   username: string;
   lastSeenAt: string | null;
+  unreadCount: number;
 };
 
 export type Message = {
   id: string;
   messageId: string;
-  conversationId: string;
+  conversation: Conversation;
   senderId: string;
   content: string;
   createdAt: string;
@@ -24,6 +25,7 @@ export type Conversation = {
   members: Member[];
   messages: Message[];
   messagesCursor: string | null;
+  lastMessage: Message;
   createdAt: Date;
   updatedAt: Date;
 };

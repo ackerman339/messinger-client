@@ -30,6 +30,10 @@ export interface DeleteMessagesDto {
   messagesIds: string[];
 }
 
+export interface ResetUnreadMessagesDto {
+  conversationId: string;
+}
+
 export const conversationService = {
   getBootstrap: async (params: PaginationParams) => {
     const response = await httpClient.get<ApiResponse<Pagination<Conversation>>>(
@@ -50,6 +54,10 @@ export const conversationService = {
 
   deleteMessages: async (data: DeleteMessagesDto) => {
     await httpClient.delete('/conversation/delete-messages', { data });
+  },
+
+  resetUnreadMessagesCount: async (data: ResetUnreadMessagesDto) => {
+    await httpClient.patch('/conversation/reset-unread-messages-count', data);
   },
 
   // TODO: type responses
