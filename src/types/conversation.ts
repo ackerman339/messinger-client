@@ -25,7 +25,7 @@ export type Conversation = {
   members: Member[];
   messages: Message[];
   messagesCursor: string | null;
-  lastMessage: Message;
+  lastMessage: Message | undefined;
   createdAt: Date;
   updatedAt: Date;
 };

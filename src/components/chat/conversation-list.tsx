@@ -37,8 +37,6 @@ export function ConversationList() {
     const unsubscribeNewConversationFrom = wsClient.on(
       WS_SERVER_EVENTS.NEW_MESSAGE,
       async (message) => {
-        console.log(message.conversation);
-
         if (!conversations.has(message.conversation.id)) {
           handleNewConversation(message.conversation);
         }
@@ -122,13 +120,13 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
   )[0];
 
   const title =
-    conversation.type === 'GROUP' ? conversation?.name : privateConversationMember.username;
+    conversation.type === 'GROUP' ? conversation?.name : privateConversationMember?.username || '';
 
   const [unreadMessageCount, setUnreadMessagesCount] = useState(
     privateConversationUser.unreadCount,
   );
 
-  const [lastMessageContent, setLastMessageContent] = useState(conversation.lastMessage.content);
+  const [lastMessageContent, setLastMessageContent] = useState(conversation.lastMessage?.content);
 
   useLayoutEffect(() => {
     const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, async (message) => {
