@@ -25,6 +25,11 @@ export interface DeleteConversationDto {
   conversationId: string;
 }
 
+export interface DeleteMessagesDto {
+  conversationId: string;
+  messagesIds: string[];
+}
+
 export const conversationService = {
   getBootstrap: async (params: PaginationParams) => {
     const response = await httpClient.get<ApiResponse<Pagination<Conversation>>>(
@@ -41,6 +46,10 @@ export const conversationService = {
     );
 
     return response.data.result;
+  },
+
+  deleteMessages: async (data: DeleteMessagesDto) => {
+    await httpClient.delete('/conversation/delete-messages', { data });
   },
 
   // TODO: type responses

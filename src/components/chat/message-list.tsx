@@ -9,14 +9,16 @@ import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
+import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
 
 import type { Message } from '@/types/conversation';
 
 export function MessageList() {
   const { activeConversation } = useChatContext();
-
   const hasConversation = !!activeConversation;
 
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -203,6 +205,36 @@ export function MessageList() {
     };
   }, [items, scrollToBottom]);
 
+  function toggleMessageSelection(messageId: string) {
+    setSelectedMessageIds((current) => {
+      if (current.includes(messageId)) {
+        return current.filter((id) => id !== messageId);
+      }
+
+      return [...current, messageId];
+    });
+  }
+
+  function clearSelection() {
+    setSelectedMessageIds([]);
+  }
+
+  async function deleteMessages() {
+    setIsDeleteMessagesLoading(true);
+    await conversationService.deleteMessages({
+      conversationId: activeConversation!.id,
+      messagesIds: selectedMessageIds,
+    });
+
+    const newItems = items.filter(
+      (message) => !selectedMessageIds.includes(message.messageId || message.id),
+    );
+
+    setItems(newItems);
+    setIsDeleteMessagesLoading(false);
+    setSelectedMessageIds([]);
+  }
+
   return (
     <div
       ref={containerRef}
@@ -216,8 +248,22 @@ export function MessageList() {
         <EmptyState label='No hay mensaje todavía' />
       )}
 
+      {selectedMessageIds.length > 0 && (
+        <MessageSelectionBar
+          count={selectedMessageIds.length}
+          isLoading={isDeletingMesssagesLoading}
+          onDelete={deleteMessages}
+          onClose={clearSelection}
+        />
+      )}
+
       {items.map((message) => (
-        <MessageBubble key={message.messageId} message={message} />
+        <MessageBubble
+          key={message.messageId}
+          message={message}
+          selected={selectedMessageIds.includes(message.id || message.messageId)}
+          onSelect={toggleMessageSelection}
+        />
       ))}
     </div>
   );
@@ -225,11 +271,16 @@ export function MessageList() {
 
 type MessageBubbleProps = {
   message: Message;
+  selected: boolean;
+  onSelect: (messageId: string) => void;
 };
 
-function MessageBubble({ message }: MessageBubbleProps) {
-  const { user } = useUserContext();
+function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
+  if (selected) {
+    console.log('BUBBLE', message.messageId, selected);
+  }
 
+  const { user } = useUserContext();
   const [downloads, setDownloads] = useState<Map<string, string>>(new Map());
 
   const isOwn = message.senderId === user?.id;
@@ -276,12 +327,22 @@ function MessageBubble({ message }: MessageBubbleProps) {
     };
   }, [message]);
 
+  function handleClick() {
+    if (!isOwn) {
+      return;
+    }
+
+    onSelect(message.id || message.messageId);
+  }
+
   return (
-    <article className={isOwn ? 'flex justify-end' : 'flex justify-start'}>
+    <article className={isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start'}>
       <div
+        onClick={handleClick}
         className={[
           'max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
           isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
+          selected ? 'ring-2 ring-accent' : '',
         ].join(' ')}
       >
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
