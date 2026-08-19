@@ -259,7 +259,7 @@ export function MessageList() {
 
       {items.map((message) => (
         <MessageBubble
-          key={message.messageId}
+          key={message.messageId || message.id}
           message={message}
           selected={selectedMessageIds.includes(message.id || message.messageId)}
           onSelect={toggleMessageSelection}

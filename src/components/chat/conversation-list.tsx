@@ -66,7 +66,7 @@ export function ConversationList() {
   }
 
   return (
-    <aside className='min-h-full border-r border-border bg-bg-sidebar md:grid md:grid-rows-[auto_1fr]'>
+    <aside className='min-h-full border-r border-border bg-bg-sidebar md:grid md:grid-rows-[auto_1fr] opacity-100 transition-opacity duration-300 starting:opacity-0'>
       <header className='h-16 border-b border-border px-4 py-3'>
         <div className='flex items-center gap-3'>
           <ChatMenu />
