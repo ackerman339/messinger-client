@@ -1,9 +1,8 @@
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { Avatar, Tooltip } from 'radix-ui';
 import { MoreVertical, ArrowLeft } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
+import { formatLastSeen } from '@lib/utils';
 
 import type { ReactNode } from 'react';
 
@@ -45,9 +44,7 @@ export function ChatHeader() {
           {activeConversation.type === 'PRIVATE' && privateConversationMember.lastSeenAt && (
             <p className='truncate text-xs text-text-secondary'>
               <span>Ultima vez: </span>
-              {format(new Date(privateConversationMember.lastSeenAt!), "d 'de' MMMM yyyy HH:mm a", {
-                locale: es,
-              })}
+              {formatLastSeen(privateConversationMember.lastSeenAt)}
             </p>
           )}
         </div>
