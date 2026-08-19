@@ -12,8 +12,13 @@ import type { EmojiClickData } from 'emoji-picker-react';
 import type { ReactNode, SubmitEvent } from 'react';
 
 export function MessageComposer() {
-  const { activeConversation, receiverId, prepareAttachments, handleSendMessage } =
-    useChatContext();
+  const {
+    activeConversation,
+    receiverId,
+    isLoadingAttachment,
+    prepareAttachments,
+    handleSendMessage,
+  } = useChatContext();
 
   const [message, setMessage] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
@@ -32,10 +37,6 @@ export function MessageComposer() {
 
   function handleChange(value: string) {
     setMessage(value);
-
-    if (!value.trim()) {
-      return;
-    }
   }
 
   function handleSubmit(event: SubmitEvent) {
@@ -43,7 +44,9 @@ export function MessageComposer() {
 
     const content = message.trim();
 
-    if (!content) return;
+    if (!content || disabled) {
+      return;
+    }
 
     handleSendMessage(content, []);
     setMessage('');
@@ -53,29 +56,30 @@ export function MessageComposer() {
   function handleClick() {
     const content = message.trim();
 
-    if (!content) return;
+    if (!content || disabled) {
+      return;
+    }
 
-    handleSendMessage(content, []);
     setMessage('');
     setEmojiPickerOpen(false);
+    handleSendMessage(content, []);
   }
 
   function handleEmojiClick(emojiData: EmojiClickData) {
     const textarea = textareaRef.current;
 
     if (!textarea) {
-      setMessage((current) => current + emojiData.emoji);
       return;
     }
 
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
+    const { selectionStart, selectionEnd } = textarea;
 
-    const nextMessage = message.slice(0, start) + emojiData.emoji + message.slice(end);
+    const nextMessage =
+      message.slice(0, selectionStart) + emojiData.emoji + message.slice(selectionEnd);
+
+    const cursorPosition = selectionStart + emojiData.emoji.length;
 
     setMessage(nextMessage);
-
-    const cursorPosition = start + emojiData.emoji.length;
 
     requestAnimationFrame(() => {
       textarea.focus();
@@ -84,27 +88,41 @@ export function MessageComposer() {
   }
 
   async function uploadFiles(files: File[]) {
-    const attachments = await prepareAttachments(files);
-    handleSendMessage('Nuevo archivo', attachments);
+    if (disabled) {
+      return;
+    }
+
+    try {
+      const attachments = await prepareAttachments(files);
+
+      await handleSendMessage('Nuevo archivo', attachments);
+    } catch (error) {
+      console.error('[attachments] failed to send files:', error);
+    }
   }
 
   return (
     <Tooltip.Provider delayDuration={150}>
       <footer className='relative grid min-h-20 max-h-80 shrink-0 grid-cols-[auto_1fr_auto] gap-x-1 border-t border-border bg-bg-app px-2 py-3'>
         {emojiPickerOpen && (
-          <div className='absolute bottom-full left-2 mb-2 z-50'>
+          <div className='absolute bottom-full left-2 z-50 mb-2'>
             <EmojiPicker emojiData={es} onEmojiClick={handleEmojiClick} width={350} height={400} />
           </div>
         )}
 
         <div className='flex self-end'>
-          <AttachmentMenu disabled={disabled} onFilesSelected={uploadFiles} />
+          <AttachmentMenu
+            disabled={disabled || isLoadingAttachment}
+            onFilesSelected={uploadFiles}
+          />
 
           <ComposerButton
             label='Emoji'
             icon={<Smile />}
-            disabled={disabled}
-            onClick={() => setEmojiPickerOpen((open) => !open)}
+            disabled={disabled || isLoadingAttachment}
+            onClick={() => {
+              setEmojiPickerOpen((open) => !open);
+            }}
           />
         </div>
 
@@ -117,11 +135,10 @@ export function MessageComposer() {
               className='block w-full resize-none bg-transparent text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
               placeholder='Escribe un mensaje'
               rows={1}
-              disabled={disabled}
+              disabled={disabled || isLoadingAttachment}
               value={message}
-              onChange={(event) => handleChange(event.target.value)}
-              onFocus={() => {
-                setEmojiPickerOpen(false);
+              onChange={(event) => {
+                handleChange(event.target.value);
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
@@ -139,7 +156,7 @@ export function MessageComposer() {
               className='grid size-11 place-items-center rounded-full bg-accent text-xl text-white transition hover:bg-accent-hover disabled:opacity-40'
               aria-label='enviar mensaje'
               title='Enviar mensaje'
-              disabled={disabled || !message.trim()}
+              disabled={disabled || !message.trim() || isLoadingAttachment}
               onClick={handleClick}
             >
               <ChevronRight />

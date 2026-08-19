@@ -22,6 +22,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<Map<string, Conversation>>(new Map());
   const [activeConversationId, setActiveConversationId] = useState('');
   const [receiverId, setReceiverId] = useState('');
+  const [isLoadingAttachment, setIsLoadingAttachment] = useState(false);
 
   const { items, isLoading, hasMore, loadMore } = useCursorPagination<Conversation>({
     fetchPage: (cursor) =>
@@ -110,6 +111,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   async function prepareAttachments(files: File[]) {
+    setIsLoadingAttachment(true);
     const mappedFiles = files.map((file) => ({
       contentType: file.type as UploadContentType,
       size: file.size,
@@ -140,7 +142,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         await fileService.uploadFile(upload, uploadItem.url);
       }),
     );
-
+    setIsLoadingAttachment(false);
     return attachments;
   }
 
@@ -178,6 +180,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         error: null,
         receiverId,
         hasMoreConversations: hasMore,
+        isLoadingAttachment,
         handleSendMessage,
         handleCurrentConversation,
         prepareAttachments,

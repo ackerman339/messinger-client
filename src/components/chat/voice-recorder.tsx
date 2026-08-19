@@ -3,7 +3,7 @@ import { useVoiceRecorder } from '@hooks/use-voice-recorder';
 import { useChatContext } from '@context/chat-context';
 
 export function VoiceRecorder() {
-  const { prepareAttachments, handleSendMessage } = useChatContext();
+  const { prepareAttachments, handleSendMessage, isLoadingAttachment } = useChatContext();
   const { isRecording, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
 
   async function handleStart() {
@@ -44,7 +44,8 @@ export function VoiceRecorder() {
       <button
         type='button'
         onClick={handleStart}
-        className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer'
+        disabled={isLoadingAttachment}
+        className='grid size-11 place-items-center rounded-full hover:bg-slate-100 cursor-pointer disabled:opacity-40'
         aria-label='grabar nota de voz'
         title='Grabar nota de voz'
       >

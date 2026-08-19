@@ -1,6 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { LoaderCircle } from 'lucide-react';
 import { wsClient } from '@clients/websocket-client';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { fileService } from '@services/files';
@@ -14,7 +15,7 @@ import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
 import type { Message } from '@/types/conversation';
 
 export function MessageList() {
-  const { activeConversation } = useChatContext();
+  const { activeConversation, isLoadingAttachment } = useChatContext();
   const hasConversation = !!activeConversation;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
@@ -241,7 +242,14 @@ export function MessageList() {
       className='chat-paper flex h-[calc(100vh-80px-64px)] max-h-[calc(100vh-80px-64px)] flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
     >
       <div ref={sentinelRef} className='h-1 min-h-1 shrink-0' />
-
+      {isLoadingAttachment && (
+        <div className='h-12 w-full lg:w-[calc(100vw-400px-48px)] flex justify-center absolute z-10 right-0'>
+          <div className='p-2 w-fit flex flex-col h-fit'>
+            <LoaderCircle className='animate-spin self-center text-accent mb-2' />
+            <span className='font-bold text-text-secondary/80 text-xs'>Subiendo</span>
+          </div>
+        </div>
+      )}
       {!hasConversation && <EmptyState label='Selecciona una conversación' />}
 
       {hasConversation && items.length === 0 && !isLoading && (
