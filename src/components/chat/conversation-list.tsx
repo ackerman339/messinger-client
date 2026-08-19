@@ -120,7 +120,9 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
   )[0];
 
   const title =
-    conversation.type === 'GROUP' ? conversation?.name : privateConversationMember?.username || '';
+    conversation.type === 'GROUP'
+      ? conversation?.name
+      : privateConversationMember?.username || 'Usuario Eliminado';
 
   const [unreadMessageCount, setUnreadMessagesCount] = useState(
     privateConversationUser.unreadCount,
@@ -186,7 +188,7 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
               'mt-0.5 block truncate text-sm',
               isActive
                 ? 'text-white/80'
-                : privateConversationUser.unreadCount > 0
+                : unreadMessageCount > 0
                   ? 'text-accent'
                   : 'text-text-secondary',
             ].join(' ')}

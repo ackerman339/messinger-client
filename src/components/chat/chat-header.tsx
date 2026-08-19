@@ -21,7 +21,7 @@ export function ChatHeader() {
   const title =
     activeConversation.type === 'GROUP'
       ? activeConversation?.name
-      : privateConversationMember.username;
+      : privateConversationMember?.username || 'Usuario Eliminado';
 
   return (
     <header className='flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
@@ -41,7 +41,7 @@ export function ChatHeader() {
         </Avatar.Root>
         <div className='min-w-0'>
           <h1 className='truncate text-base font-semibold'>{title}</h1>
-          {activeConversation.type === 'PRIVATE' && privateConversationMember.lastSeenAt && (
+          {activeConversation.type === 'PRIVATE' && privateConversationMember?.lastSeenAt && (
             <p className='truncate text-xs text-text-secondary'>
               <span>Ultima vez: </span>
               {formatLastSeen(privateConversationMember.lastSeenAt)}
