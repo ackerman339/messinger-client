@@ -288,25 +288,32 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
 
   const isOwn = message.senderId === user?.id;
-
   const messageId = message.messageId || message.id;
 
-  function handleClick() {
+  function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
     if (!isOwn) {
       return;
     }
+    event.stopPropagation();
+    console.log(event.currentTarget);
 
     onSelect(messageId);
   }
 
   return (
-    <article className={isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start'}>
+    <article
+      data-selector-id={messageId}
+      onClick={handleClick}
+      className={[
+        'p-2',
+        isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start',
+        selected ? 'ring-1 ring-accent/10 bg-accent/10' : '',
+      ].join(' ')}
+    >
       <div
-        onClick={handleClick}
         className={[
           'max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
           isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
-          selected ? 'ring-2 ring-accent' : '',
         ].join(' ')}
       >
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
@@ -314,7 +321,12 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
         </p>
 
         {message.attachments?.length > 0 && (
-          <ul className='my-2 space-y-2'>
+          <ul
+            className='my-2 space-y-2'
+            onClick={(event) => {
+              event.stopPropagation();
+            }}
+          >
             {message.attachments.map((attachment) => (
               <li key={attachment.id}>
                 <MessageAttachment attachment={attachment} />
