@@ -1,16 +1,16 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LoaderCircle } from 'lucide-react';
 import { wsClient } from '@clients/websocket-client';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
-import { fileService } from '@services/files';
 import { conversationService } from '@/services/conversation';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
 import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
+import { MessageAttachment } from '@/components/chat/attachments/message-attachment';
 
 import type { Message } from '@/types/conversation';
 
@@ -187,7 +187,7 @@ export function MessageList() {
 
     observer.observe(container);
 
-    const frame1 = requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       scrollToBottom();
     });
 
@@ -200,7 +200,7 @@ export function MessageList() {
     }, 150);
 
     return () => {
-      cancelAnimationFrame(frame1);
+      cancelAnimationFrame(frame);
       window.clearTimeout(timeout);
       observer.disconnect();
     };
@@ -242,14 +242,6 @@ export function MessageList() {
       className='chat-paper flex h-[calc(100vh-80px-64px)] max-h-[calc(100vh-80px-64px)] flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
     >
       <div ref={sentinelRef} className='h-1 min-h-1 shrink-0' />
-      {isLoadingAttachment && (
-        <div className='h-12 w-full lg:w-[calc(100vw-400px-48px)] flex justify-center absolute z-10 right-0'>
-          <div className='p-2 w-fit flex flex-col h-fit'>
-            <LoaderCircle className='animate-spin self-center text-accent mb-2' />
-            <span className='font-bold text-text-secondary/80 text-xs'>Subiendo</span>
-          </div>
-        </div>
-      )}
       {!hasConversation && <EmptyState label='Selecciona una conversación' />}
 
       {hasConversation && items.length === 0 && !isLoading && (
@@ -263,6 +255,15 @@ export function MessageList() {
           onDelete={deleteMessages}
           onClose={clearSelection}
         />
+      )}
+
+      {isLoadingAttachment && (
+        <div className='h-12 w-full lg:w-[calc(100vw-400px-48px)] flex justify-center absolute z-10 right-0'>
+          <div className='p-2 w-fit flex flex-col h-fit'>
+            <LoaderCircle className='animate-spin self-center text-accent mb-2' />
+            <span className='font-bold text-text-secondary/80 text-xs'>Subiendo</span>
+          </div>
+        </div>
       )}
 
       {items.map((message) => (
@@ -285,58 +286,17 @@ type MessageBubbleProps = {
 
 function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
-  const [downloads, setDownloads] = useState<Map<string, string>>(new Map());
 
   const isOwn = message.senderId === user?.id;
 
-  useEffect(() => {
-    if (!message.attachments || message.attachments.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-
-    async function getDownloadUrls() {
-      const downloads: {
-        id: string;
-        url: string;
-      }[] = [];
-
-      for (const attachment of message.attachments) {
-        const result = await fileService.downloadFile({
-          attachmentId: attachment.id,
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        downloads.push({
-          id: attachment.id,
-          url: result.url,
-        });
-      }
-
-      if (cancelled) {
-        return;
-      }
-
-      setDownloads(new Map(downloads.map((download) => [download.id, download.url])));
-    }
-
-    getDownloadUrls();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [message]);
+  const messageId = message.messageId || message.id;
 
   function handleClick() {
     if (!isOwn) {
       return;
     }
 
-    onSelect(message.id || message.messageId);
+    onSelect(messageId);
   }
 
   return (
@@ -355,33 +315,11 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
 
         {message.attachments?.length > 0 && (
           <ul className='my-2 space-y-2'>
-            {message.attachments.map((attachment) => {
-              const url = downloads.get(attachment.id);
-
-              if (!url) {
-                return null;
-              }
-
-              if (attachment.contentType.startsWith('audio/')) {
-                return (
-                  <li key={attachment.id}>
-                    <audio controls preload='auto' src={url} className='max-w-full' />
-                  </li>
-                );
-              }
-
-              return (
-                <li key={attachment.id} className='text-accent'>
-                  <a
-                    href={url}
-                    download={attachment.fileName}
-                    className='hover:underline wrap-break-word'
-                  >
-                    {attachment.fileName}
-                  </a>
-                </li>
-              );
-            })}
+            {message.attachments.map((attachment) => (
+              <li key={attachment.id}>
+                <MessageAttachment attachment={attachment} />
+              </li>
+            ))}
           </ul>
         )}
 
