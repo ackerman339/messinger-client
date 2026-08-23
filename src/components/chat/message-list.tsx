@@ -317,7 +317,18 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
         ].join(' ')}
       >
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
-          {message.content}
+          {/^https?:\/\/\S+$/.test(message.content.trim()) ? (
+            <a
+              href={message.content.trim()}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='text-primary underline hover:opacity-80'
+            >
+              {message.content}
+            </a>
+          ) : (
+            message.content
+          )}
         </p>
 
         {message.attachments?.length > 0 && (

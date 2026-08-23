@@ -46,8 +46,6 @@ export function ConversationList() {
     const unsubscribeNewConversationTo = wsClient.on(
       WS_SERVER_EVENTS.MESSAGE_SENT,
       async (message) => {
-        console.log(message.conversation);
-
         if (!conversations.has(message.conversation.id)) {
           handleNewConversation(message.conversation);
         }
