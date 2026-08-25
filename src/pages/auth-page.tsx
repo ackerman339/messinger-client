@@ -40,8 +40,6 @@ export function AuthPage() {
     } catch (error: unknown) {
       if (!(error instanceof AxiosError)) {
         console.error(error);
-        setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
-
         return;
       }
 
@@ -49,6 +47,8 @@ export function AuthPage() {
         setError('Usuario ya existe');
         return;
       }
+
+      setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
     } finally {
       setSubmitting(false);
     }
