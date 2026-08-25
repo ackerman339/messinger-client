@@ -1,3 +1,4 @@
+import { AxiosError } from 'axios';
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { authService } from '@services/auth';
@@ -37,8 +38,17 @@ export function AuthPage() {
       const response = await authService.signUp({ username });
       setCreatedLoginKey(response.loginKey);
     } catch (error: unknown) {
-      console.log(error);
-      setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
+      if (!(error instanceof AxiosError)) {
+        console.error(error);
+        setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
+
+        return;
+      }
+
+      if (mode === 'sign-up' && error.status === 409) {
+        setError('Usuario ya existe');
+        return;
+      }
     } finally {
       setSubmitting(false);
     }
