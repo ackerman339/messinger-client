@@ -34,6 +34,12 @@ export interface ResetUnreadMessagesDto {
   conversationId: string;
 }
 
+export interface RequestUserConnectionDto {
+  senderName: string;
+  targetUserId: string;
+  conversationId: string;
+}
+
 export const conversationService = {
   getBootstrap: async (params: PaginationParams) => {
     const response = await httpClient.get<ApiResponse<Pagination<Conversation>>>(
@@ -54,6 +60,10 @@ export const conversationService = {
 
   deleteMessages: async (data: DeleteMessagesDto) => {
     await httpClient.delete('/conversation/delete-messages', { data });
+  },
+
+  requestUserConnection: async (data: RequestUserConnectionDto) => {
+    await httpClient.post('/push/request-user-connection', data);
   },
 
   resetUnreadMessagesCount: async (data: ResetUnreadMessagesDto) => {

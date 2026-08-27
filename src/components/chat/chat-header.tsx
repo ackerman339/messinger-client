@@ -1,10 +1,9 @@
-import { Avatar, Tooltip } from 'radix-ui';
-import { MoreVertical, ArrowLeft } from 'lucide-react';
+import { Avatar, DropdownMenu } from 'radix-ui';
+import { ArrowLeft, EllipsisVertical, MicSignal } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { formatLastSeen } from '@lib/utils';
-
-import type { ReactNode } from 'react';
+import { conversationService } from '@services/conversation';
 
 export function ChatHeader() {
   const { user } = useUserContext();
@@ -50,42 +49,56 @@ export function ChatHeader() {
         </div>
       </div>
 
-      <Tooltip.Provider delayDuration={150}>
-        <div className='flex items-center gap-1'>
-          {/*  <HeaderButton label='Search' icon={<Search />} /> */}
-          <HeaderButton label='More options' icon={<MoreVertical />} />
-        </div>
-      </Tooltip.Provider>
+      <div className='flex items-center gap-1'>
+        {/*  <HeaderButton label='Search' icon={<Search />} /> */}
+        <HeaderButton />
+      </div>
     </header>
   );
 }
 
-type HeaderButtonProps = {
-  label: string;
-  icon: ReactNode;
-};
+function HeaderButton() {
+  const { user } = useUserContext();
+  const { activeConversation } = useChatContext();
+  const privateConversationMember = activeConversation?.members.filter(
+    (member) => member.userId !== user?.id,
+  )[0];
 
-function HeaderButton({ label, icon }: HeaderButtonProps) {
+  async function handleRequestConnection() {
+    await conversationService.requestUserConnection({
+      senderName: user!.username,
+      conversationId: activeConversation!.id,
+      targetUserId: privateConversationMember!.userId,
+    });
+  }
+
   return (
-    <Tooltip.Root>
-      <Tooltip.Trigger asChild>
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
         <button
-          className='grid size-10 place-items-center rounded-full text-xl text-text-secondary transition hover:bg-slate-100 hover:text-text-primary'
           type='button'
-          aria-label={label}
+          className='grid size-10 place-items-center rounded-full cursor-pointer text-text-secondary hover:bg-slate-100'
+          aria-label='Menu'
         >
-          {icon}
+          <EllipsisVertical size={22} />
         </button>
-      </Tooltip.Trigger>
-      <Tooltip.Portal>
-        <Tooltip.Content
-          className='rounded bg-slate-900 px-2 py-1 text-xs text-white shadow'
-          sideOffset={6}
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align='start'
+          sideOffset={8}
+          className='z-50 min-w-52 rounded-lg border border-border bg-bg-app p-1 shadow-lg'
         >
-          {label}
-          <Tooltip.Arrow className='fill-slate-900' />
-        </Tooltip.Content>
-      </Tooltip.Portal>
-    </Tooltip.Root>
+          <DropdownMenu.Item
+            className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+            onSelect={handleRequestConnection}
+          >
+            <MicSignal size={18} />
+            <span>Solicitar que se conecte</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

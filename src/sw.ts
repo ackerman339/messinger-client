@@ -25,6 +25,21 @@ self.addEventListener('push', (event) => {
       body,
       icon,
       data,
+
+      ...(data?.type === 'request-connection' && {
+        requireInteraction: true,
+        vibrate: [0, 300, 100, 300, 100, 300],
+        actions: [
+          {
+            action: 'accept',
+            title: 'Aceptar',
+          },
+          {
+            action: 'reject',
+            title: 'Rechazar',
+          },
+        ],
+      }),
     }),
   );
 });
@@ -32,34 +47,60 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const { conversationId } = event.notification.data ?? {};
+  const { type, conversationId } = event.notification.data ?? {};
 
-  if (!conversationId) {
+  if (type === 'request-connection') {
+    event.waitUntil(
+      handleConnectRequest({
+        action: event.action,
+        conversationId,
+      }),
+    );
+
     return;
   }
 
   const url = `/chat?conversationId=${encodeURIComponent(conversationId)}`;
-
-  event.waitUntil(
-    (async () => {
-      const windowClients = await self.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true,
-      });
-
-      // Messinger ya está abierto.
-      if (windowClients.length > 0) {
-        const client = windowClients[0];
-
-        await client.focus();
-
-        await client.navigate(url);
-
-        return;
-      }
-
-      // Messinger está cerrado.
-      await self.clients.openWindow(url);
-    })(),
-  );
+  event.waitUntil(openOrFocusWindow(url));
 });
+
+async function handleConnectRequest({
+  action,
+  conversationId,
+}: {
+  action: string;
+  conversationId: string;
+}) {
+  const url = `/chat?conversationId=${encodeURIComponent(conversationId)}`;
+
+  if (action === 'accept') {
+    await openOrFocusWindow(url);
+    return;
+  }
+
+  if (action === 'reject') {
+    return;
+  }
+
+  await openOrFocusWindow(url);
+}
+
+async function openOrFocusWindow(url: string) {
+  const windowClients = await self.clients.matchAll({
+    type: 'window',
+    includeUncontrolled: true,
+  });
+
+  if (windowClients.length > 0) {
+    const client = windowClients[0];
+    await client.focus();
+
+    if ('navigate' in client) {
+      await client.navigate(url);
+    }
+
+    return;
+  }
+
+  await self.clients.openWindow(url);
+}
