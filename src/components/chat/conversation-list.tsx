@@ -130,17 +130,21 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
 
   useLayoutEffect(() => {
     const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, async (message) => {
-      if (activeConversation?.id === message.conversation.id) {
-        setLastMessageContent(message.content);
-        await conversationService.resetUnreadMessagesCount({
-          conversationId: activeConversation.id,
-        });
-        return;
-      }
-
-      if (message.conversation.id === conversation.id) {
-        setUnreadMessagesCount((prev) => prev + 1);
-        setLastMessageContent(message.content);
+      if (activeConversation) {
+        if (message.conversation.id === conversation.id) {
+          if (activeConversation.id !== conversation.id) {
+            setUnreadMessagesCount((prev) => prev + 1);
+          }
+          setLastMessageContent(message.content);
+          await conversationService.resetUnreadMessagesCount({
+            conversationId: activeConversation.id,
+          });
+        }
+      } else {
+        if (message.conversation.id === conversation.id) {
+          setUnreadMessagesCount((prev) => prev + 1);
+          setLastMessageContent(message.content);
+        }
       }
     });
 
@@ -154,7 +158,7 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
       unsubscribeNewMessage();
       unsubscribeMessageSent();
     };
-  }, [activeConversation?.id, conversation.id]);
+  }, [activeConversation, conversation.id]);
 
   useEffect(() => {
     if (activeConversation?.id !== conversation.id) {
