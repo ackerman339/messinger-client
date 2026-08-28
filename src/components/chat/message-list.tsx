@@ -95,12 +95,19 @@ export function MessageList() {
 
   useLayoutEffect(() => {
     const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-      enableScrollToBottom.current = true;
+      if (activeConversation?.id !== message.conversation.id) {
+        return;
+      }
 
+      enableScrollToBottom.current = true;
       setItems((prev) => [...prev, message]);
     });
 
     const unsubscribeSentMessage = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
+      if (activeConversation?.id !== message.conversation.id) {
+        return;
+      }
+
       enableScrollToBottom.current = true;
       setItems((prev) => [...prev, message]);
     });
@@ -109,7 +116,7 @@ export function MessageList() {
       unsubscribeNewMessage();
       unsubscribeSentMessage();
     };
-  }, [items, setItems, scrollToBottom]);
+  }, [items, setItems, activeConversation, scrollToBottom]);
 
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: handleLoadMore,
