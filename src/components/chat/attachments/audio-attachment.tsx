@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { format, intervalToDuration } from 'date-fns';
-import { Pause, Play, Volume2, VolumeX, LoaderCircle } from 'lucide-react';
-
+import { Pause, Play, LoaderCircle } from 'lucide-react';
 import { fileService } from '@/services/files';
 
 type AudioAttachmentProps = {
@@ -13,20 +11,24 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const [url, setUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+
+  const [isLoadingUrl, setIsLoadingUrl] = useState(true);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [error, setError] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [volume, setVolume] = useState(1);
 
+  /**
+   * Obtiene la URL del archivo.
+   */
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        setIsLoading(true);
+        setIsLoadingUrl(true);
         setError(false);
 
         const result = await fileService.downloadFile({
@@ -43,12 +45,11 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
           return;
         }
 
-        console.error('[attachment:audio] failed to load:', error);
-
+        console.error('[audio] failed to get URL:', error);
         setError(true);
       } finally {
         if (!cancelled) {
-          setIsLoading(false);
+          setIsLoadingUrl(false);
         }
       }
     }
@@ -60,6 +61,9 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
     };
   }, [attachmentId]);
 
+  /**
+   * Configura los eventos del elemento audio.
+   */
   useEffect(() => {
     const audio = audioRef.current;
 
@@ -68,62 +72,99 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
     }
 
     function handleLoadedMetadata() {
-      if (!audio) {
-        return;
-      }
-
-      setDuration(audio.duration);
+      setDuration(audio!.duration);
     }
 
     function handleTimeUpdate() {
-      if (!audio) {
-        return;
-      }
-
-      setCurrentTime(audio.currentTime);
+      setCurrentTime(audio!.currentTime);
     }
 
     function handlePlay() {
       setIsPlaying(true);
+      setIsBuffering(false);
+    }
+
+    function handlePlaying() {
+      setIsPlaying(true);
+      setIsBuffering(false);
     }
 
     function handlePause() {
       setIsPlaying(false);
+      setIsBuffering(false);
+    }
+
+    function handleWaiting() {
+      setIsBuffering(true);
+    }
+
+    function handleCanPlay() {
+      setIsBuffering(false);
     }
 
     function handleEnded() {
       setIsPlaying(false);
+      setIsBuffering(false);
       setCurrentTime(0);
+    }
+
+    function handleError() {
+      console.error('[audio] media error:', audio!.error);
+
+      setIsPlaying(false);
+      setIsBuffering(false);
+      setError(true);
     }
 
     audio.addEventListener('loadedmetadata', handleLoadedMetadata);
     audio.addEventListener('timeupdate', handleTimeUpdate);
+
     audio.addEventListener('play', handlePlay);
+    audio.addEventListener('playing', handlePlaying);
     audio.addEventListener('pause', handlePause);
+
+    audio.addEventListener('waiting', handleWaiting);
+    audio.addEventListener('canplay', handleCanPlay);
+
     audio.addEventListener('ended', handleEnded);
+    audio.addEventListener('error', handleError);
 
     return () => {
       audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
       audio.removeEventListener('timeupdate', handleTimeUpdate);
+
       audio.removeEventListener('play', handlePlay);
+      audio.removeEventListener('playing', handlePlaying);
       audio.removeEventListener('pause', handlePause);
+
+      audio.removeEventListener('waiting', handleWaiting);
+      audio.removeEventListener('canplay', handleCanPlay);
+
       audio.removeEventListener('ended', handleEnded);
+      audio.removeEventListener('error', handleError);
     };
   }, [url]);
 
-  function togglePlay() {
+  async function togglePlay() {
     const audio = audioRef.current;
 
     if (!audio) {
       return;
     }
 
-    if (audio.paused) {
-      audio.play().catch((error) => {
-        console.error('[audio] failed to play:', error);
-      });
-    } else {
+    if (!audio.paused) {
       audio.pause();
+      return;
+    }
+
+    try {
+      setIsBuffering(true);
+
+      await audio.play();
+    } catch (error) {
+      setIsBuffering(false);
+
+      console.error('[audio] failed to play:', error);
     }
   }
 
@@ -136,53 +177,28 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
 
     const time = Number(event.target.value);
 
+    if (!Number.isFinite(time)) {
+      return;
+    }
+
     audio.currentTime = time;
     setCurrentTime(time);
   }
 
-  function handleVolumeChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const audio = audioRef.current;
-
-    if (!audio) {
-      return;
-    }
-
-    const nextVolume = Number(event.target.value);
-
-    audio.volume = nextVolume;
-    setVolume(nextVolume);
-  }
-
-  function toggleMute() {
-    const audio = audioRef.current;
-
-    if (!audio) {
-      return;
-    }
-
-    if (audio.volume === 0) {
-      audio.volume = volume || 1;
-    } else {
-      audio.volume = 0;
-    }
-  }
   function formatTime(value: number) {
     if (!Number.isFinite(value) || value < 0) {
       return '0:00';
     }
 
-    const duration = intervalToDuration({
-      start: 0,
-      end: value * 1000,
-    });
+    const totalSeconds = Math.floor(value);
 
-    const minutes = duration.minutes ?? 0;
-    const seconds = duration.seconds ?? 0;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
 
-    return format(new Date(0, 0, 0, 0, minutes, seconds), 'm:ss');
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   }
 
-  if (isLoading) {
+  if (isLoadingUrl) {
     return (
       <div className='flex h-12 w-72 items-center justify-center rounded-lg bg-slate-100'>
         <LoaderCircle className='animate-spin text-accent' size={20} />
@@ -200,15 +216,18 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
 
   return (
     <div className='flex h-12 w-72 max-w-full items-center gap-2 rounded-lg bg-slate-100 px-2'>
-      <audio ref={audioRef} src={url} preload='metadata' className='hidden' aria-label={fileName} />
+      <audio ref={audioRef} src={url} preload='auto' className='hidden' aria-label={fileName} />
 
       <button
         type='button'
         onClick={togglePlay}
-        className='grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent-hover cursor-pointer'
+        disabled={isBuffering}
+        className='grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70 cursor-pointer'
         aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
       >
-        {isPlaying ? (
+        {isBuffering ? (
+          <LoaderCircle size={17} className='animate-spin' />
+        ) : isPlaying ? (
           <Pause size={17} fill='currentColor' />
         ) : (
           <Play size={17} fill='currentColor' />
@@ -226,31 +245,12 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
         step={0.01}
         value={currentTime}
         onChange={handleSeek}
+        disabled={!duration}
         className='h-1 min-w-0 flex-1 cursor-pointer accent-accent'
         aria-label='Progreso del audio'
       />
 
       <span className='w-8 shrink-0 text-[11px] text-text-secondary'>{formatTime(duration)}</span>
-
-      <button
-        type='button'
-        onClick={toggleMute}
-        className='grid size-8 shrink-0 place-items-center rounded-full text-text-secondary transition hover:bg-slate-200 hover:text-text-primary'
-        aria-label={volume === 0 ? 'Activar sonido' : 'Silenciar'}
-      >
-        {volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
-      </button>
-
-      <input
-        type='range'
-        min={0}
-        max={1}
-        step={0.01}
-        value={volume}
-        onChange={handleVolumeChange}
-        className='hidden'
-        aria-label='Volumen'
-      />
     </div>
   );
 }
