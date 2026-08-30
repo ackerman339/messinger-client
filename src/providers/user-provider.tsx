@@ -65,7 +65,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(user);
         connect(import.meta.env.VITE_WEB_SOCKET_URL);
         await setupNotifications();
-      } catch {
+      } catch (error) {
+        console.log('AAA', error);
         setUser(null);
       } finally {
         setLoading(false);

@@ -23,6 +23,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeConversationId, setActiveConversationId] = useState('');
   const [receiverId, setReceiverId] = useState('');
   const [isLoadingAttachment, setIsLoadingAttachment] = useState(false);
+  const [isChatEmpty, setIsChatEmpty] = useState(false);
 
   const { items, isLoading, hasMore, loadMore } = useCursorPagination<Conversation>({
     fetchPage: (cursor) =>
@@ -171,6 +172,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  function handleEmptyChat() {
+    setIsChatEmpty((prev) => !prev);
+  }
+
   return (
     <ChatContext.Provider
       value={{
@@ -181,6 +186,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         receiverId,
         hasMoreConversations: hasMore,
         isLoadingAttachment,
+        isChatEmpty,
         handleSendMessage,
         handleCurrentConversation,
         prepareAttachments,
@@ -189,6 +195,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         unSetCurrentConversation,
         loadMoreConversations: loadMore,
         handleNewConversation,
+        handleEmptyChat,
       }}
     >
       {children}

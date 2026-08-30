@@ -1,5 +1,5 @@
 import { Avatar, DropdownMenu } from 'radix-ui';
-import { ArrowLeft, EllipsisVertical, MicSignal } from 'lucide-react';
+import { ArrowLeft, EllipsisVertical, MicSignal, BrushCleaning } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { formatLastSeen } from '@lib/utils';
@@ -59,7 +59,8 @@ export function ChatHeader() {
 
 function HeaderButton() {
   const { user } = useUserContext();
-  const { activeConversation } = useChatContext();
+  const { activeConversation, handleEmptyChat } = useChatContext();
+
   const privateConversationMember = activeConversation?.members.filter(
     (member) => member.userId !== user?.id,
   )[0];
@@ -70,6 +71,11 @@ function HeaderButton() {
       conversationId: activeConversation!.id,
       targetUserId: privateConversationMember!.userId,
     });
+  }
+
+  async function handleEmptyMessages() {
+    await conversationService.emptyMessages({ conversationId: activeConversation!.id });
+    handleEmptyChat();
   }
 
   return (
@@ -96,6 +102,13 @@ function HeaderButton() {
           >
             <MicSignal size={18} />
             <span>Solicitar que se conecte</span>
+          </DropdownMenu.Item>
+          <DropdownMenu.Item
+            className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+            onSelect={handleEmptyMessages}
+          >
+            <BrushCleaning size={18} />
+            <span>Vaciar chat</span>
           </DropdownMenu.Item>
         </DropdownMenu.Content>
       </DropdownMenu.Portal>

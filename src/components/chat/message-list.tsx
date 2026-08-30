@@ -15,7 +15,8 @@ import { MessageAttachment } from '@/components/chat/attachments/message-attachm
 import type { Message } from '@/types/conversation';
 
 export function MessageList() {
-  const { activeConversation, isLoadingAttachment } = useChatContext();
+  const { activeConversation, isLoadingAttachment, isChatEmpty, handleEmptyChat } =
+    useChatContext();
   const hasConversation = !!activeConversation;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
@@ -213,6 +214,15 @@ export function MessageList() {
     };
   }, [items, scrollToBottom]);
 
+  useEffect(() => {
+    if (!isChatEmpty) {
+      return;
+    }
+
+    setItems([]);
+    handleEmptyChat();
+  }, [isChatEmpty, handleEmptyChat, setItems]);
+
   function toggleMessageSelection(messageId: string) {
     setSelectedMessageIds((current) => {
       if (current.includes(messageId)) {
@@ -249,10 +259,8 @@ export function MessageList() {
       className='chat-paper flex h-[calc(100vh-80px-64px)] max-h-[calc(100vh-80px-64px)] flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
     >
       <div ref={sentinelRef} className='h-1 min-h-1 shrink-0' />
-      {!hasConversation && <EmptyState label='Selecciona una conversación' />}
-
       {hasConversation && items.length === 0 && !isLoading && (
-        <EmptyState label='No hay mensaje todavía' />
+        <EmptyState label='No hay mensajes todavía' />
       )}
 
       {selectedMessageIds.length > 0 && (

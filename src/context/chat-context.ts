@@ -13,6 +13,7 @@ export type ChatContextValue = {
   receiverId: string;
   hasMoreConversations: boolean;
   isLoadingAttachment: boolean;
+  isChatEmpty: boolean;
   handleSendMessage: (content: string, attachments: FileAttachment[]) => void;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
@@ -21,6 +22,7 @@ export type ChatContextValue = {
   unSetCurrentConversation: () => void;
   loadMoreConversations: () => void;
   handleNewConversation: (conversation: Conversation) => void;
+  handleEmptyChat: () => void;
 };
 
 export const ChatContext = createContext<ChatContextValue>({
@@ -31,6 +33,7 @@ export const ChatContext = createContext<ChatContextValue>({
   receiverId: '',
   hasMoreConversations: false,
   isLoadingAttachment: false,
+  isChatEmpty: false,
   handleSendMessage: () => {},
   handleCurrentConversation: () => {},
   prepareAttachments: async () => [] as FileAttachment[],
@@ -39,6 +42,7 @@ export const ChatContext = createContext<ChatContextValue>({
   unSetCurrentConversation: () => {},
   loadMoreConversations: () => {},
   handleNewConversation: () => {},
+  handleEmptyChat: () => {},
 });
 
 export function useChatContext() {

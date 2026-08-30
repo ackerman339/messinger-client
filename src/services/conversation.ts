@@ -70,6 +70,10 @@ export const conversationService = {
     await httpClient.patch('/conversation/reset-unread-messages-count', data);
   },
 
+  emptyMessages: async (data: DeleteConversationDto) => {
+    await httpClient.patch('/conversation/empty-messages', data);
+  },
+
   // TODO: type responses
   createGroup: (data: CreateGroupDto) => httpClient.post('/conversation/create-group', data),
 
