@@ -3,6 +3,7 @@ import { useUserContext } from '@context/user-context';
 import { useEffect, useState, type ReactNode } from 'react';
 import { ServerOff, WifiOff } from 'lucide-react';
 import { httpClient } from '@clients/http-client';
+import { connect, disconnect } from '@clients/websocket-client';
 
 type ServerStatus = 'checking' | 'online' | 'offline';
 
@@ -15,11 +16,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
+      connect(import.meta.env.VITE_WEB_SOCKET_URL);
     };
 
     const handleOffline = () => {
       setIsOnline(false);
-      setServerStatus('offline');
+      disconnect();
     };
 
     window.addEventListener('online', handleOnline);
@@ -33,8 +35,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isOnline) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setServerStatus('offline');
       return;
     }
 
