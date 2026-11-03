@@ -1,54 +1,32 @@
 import { AxiosError } from 'axios';
-import { useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { authService } from '@services/auth';
 import Logo from '../assets/logo.svg';
 
 import type { SubmitEvent } from 'react';
 
-type AuthMode = 'sign-in' | 'sign-up';
-
 export function AuthPage() {
-  const location = useLocation();
   const navigate = useNavigate();
   const [loginKey, setLoginKey] = useState('');
-  const [username, setUsername] = useState('');
-  const [createdLoginKey, setCreatedLoginKey] = useState('');
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const mode: AuthMode = useMemo(
-    () => (location.pathname === '/sign-up' ? 'sign-up' : 'sign-in'),
-    [location.pathname],
-  );
 
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    setCreatedLoginKey('');
     setSubmitting(true);
 
     try {
-      if (mode === 'sign-in') {
-        await authService.signIn({ loginKey });
-        navigate('/chat', { replace: true });
-        return;
-      }
-
-      const response = await authService.signUp({ username });
-      setCreatedLoginKey(response.loginKey);
+      await authService.signIn({ loginKey });
+      navigate('/chat', { replace: true });
     } catch (error: unknown) {
       if (!(error instanceof AxiosError)) {
         console.error(error);
         return;
       }
 
-      if (mode === 'sign-up' && error.status === 409) {
-        setError('Usuario ya existe');
-        return;
-      }
-
-      setError(mode === 'sign-in' ? 'Clave de acceso inválida' : 'No se puede crear usuario');
+      setError('Clave de acceso inválida');
     } finally {
       setSubmitting(false);
     }
@@ -61,73 +39,22 @@ export function AuthPage() {
           <div className='mx-auto mb-4 grid size-14 place-items-center rounded-full bg-accent text-lg font-semibold text-white'>
             <img src={Logo} alt='Logo' className='h-full w-full rounded-full' />
           </div>
-          <p className='mt-2 text-sm text-text-secondary'>
-            {mode === 'sign-in'
-              ? 'Usa tu clave de acceso para chatear.'
-              : 'Crea un nombre de usuario y guarda tu clave de acceso'}
-          </p>
-        </div>
-
-        <div className='mb-5 grid grid-cols-2 rounded-lg bg-slate-100 p-1 text-sm font-medium'>
-          <Link
-            className={[
-              'rounded-md px-3 py-2 text-center transition',
-              mode === 'sign-in'
-                ? 'bg-white text-text-primary shadow-sm'
-                : 'text-text-secondary hover:text-text-primary',
-            ].join(' ')}
-            to='/sign-in'
-          >
-            Entra
-          </Link>
-          <Link
-            className={[
-              'rounded-md px-3 py-2 text-center transition',
-              mode === 'sign-up'
-                ? 'bg-white text-text-primary shadow-sm'
-                : 'text-text-secondary hover:text-text-primary',
-            ].join(' ')}
-            to='/sign-up'
-          >
-            Regístrate
-          </Link>
+          <p className='mt-2 text-sm text-text-secondary'>Usa tu clave de acceso para chatear.</p>
         </div>
 
         <form className='space-y-4' onSubmit={handleSubmit}>
-          {mode === 'sign-in' ? (
-            <label className='block'>
-              <span className='mb-2 block text-sm font-medium text-text-primary'>
-                Clave de accesso
-              </span>
-              <input
-                className='h-11 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20'
-                value={loginKey}
-                onChange={(event) => setLoginKey(event.target.value)}
-                placeholder='AABBCCDD'
-                required
-              />
-            </label>
-          ) : (
-            <label className='block'>
-              <span className='mb-2 block text-sm font-medium text-text-primary'>
-                Tu nombre de usuario
-              </span>
-              <input
-                className='h-11 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20'
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder='John Doe'
-                required
-              />
-            </label>
-          )}
-
-          {createdLoginKey ? (
-            <div className='rounded-lg border border-accent/30 bg-accent/10 p-3 text-sm'>
-              <p className='font-medium text-text-primary'>Tu clave de acceso, no la pierdas!</p>
-              <p className='mt-1 break-all font-mono text-accent'>{createdLoginKey}</p>
-            </div>
-          ) : null}
+          <label className='block'>
+            <span className='mb-2 block text-sm font-medium text-text-primary'>
+              Clave de accesso
+            </span>
+            <input
+              className='h-11 w-full rounded-lg border border-border bg-white px-3 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20'
+              value={loginKey}
+              onChange={(event) => setLoginKey(event.target.value)}
+              placeholder='AABBCCDD'
+              required
+            />
+          </label>
 
           {error ? <p className='text-sm text-red-500'>{error}</p> : null}
 
@@ -136,13 +63,7 @@ export function AuthPage() {
             type='submit'
             disabled={submitting}
           >
-            {submitting
-              ? mode === 'sign-in'
-                ? 'Entrando...'
-                : 'Creando cuenta...'
-              : mode === 'sign-in'
-                ? 'Entrar'
-                : 'Registrar'}
+            {submitting ? 'Entrando...' : 'Entrar'}
           </button>
         </form>
       </section>
