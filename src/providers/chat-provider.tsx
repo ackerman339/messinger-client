@@ -114,7 +114,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   async function prepareAttachments(files: File[]) {
     setIsLoadingAttachment(true);
     const mappedFiles = files.map((file) => ({
-      contentType: file.type as UploadContentType,
+      contentType: (file.type || 'application/octet-stream') as UploadContentType,
       size: file.size,
       fileName: file.name,
     }));

@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { DropdownMenu } from 'radix-ui';
-import { FileText, Image, Paperclip, Plus, Video } from 'lucide-react';
+import { FileText, Image, Paperclip, Plus, Video, FileUp } from 'lucide-react';
 
 type AttachmentMenuProps = {
   disabled?: boolean;
@@ -12,6 +12,7 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
   const videoInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const otherFilesRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
@@ -88,6 +89,17 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
               <Paperclip className='size-5' />
               <span>Documentos</span>
             </DropdownMenu.Item>
+
+            <DropdownMenu.Item
+              className='flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-none hover:bg-slate-100'
+              onSelect={(event) => {
+                event.preventDefault();
+                documentInputRef.current?.click();
+              }}
+            >
+              <FileUp className='size-5' />
+              <span>Otros Archivos</span>
+            </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
@@ -123,6 +135,15 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
         ref={documentInputRef}
         type='file'
         accept='.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.odp,.txt,.csv'
+        multiple
+        hidden
+        onChange={handleFileChange}
+      />
+
+      <input
+        ref={otherFilesRef}
+        type='file'
+        accept='.kml, .kmz, .shp, shx, .dbf, .prj, .zip, .rar, .tar, .apk, .dmg, .geojson, .gpx, .tab, .tif, .tiff, .dae, .skp'
         multiple
         hidden
         onChange={handleFileChange}

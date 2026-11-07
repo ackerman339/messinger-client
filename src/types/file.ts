@@ -1,35 +1,76 @@
-export const UPLOAD_CONTENT_TYPES = [
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/gif',
+export type UploadContentType =
+  // Images
+  | 'image/jpeg'
+  | 'image/png'
+  | 'image/webp'
+  | 'image/gif'
+  | 'image/tiff'
+  | 'image/geotiff'
 
-  'video/mp4',
-  'video/webm',
-  'video/quicktime',
+  // Video
+  | 'video/mp4'
+  | 'video/webm'
+  | 'video/quicktime'
 
-  'audio/webm',
-  'audio/ogg',
-  'audio/mp4',
-  'audio/mpeg',
+  // Audio
+  | 'audio/webm'
+  | 'audio/ogg'
+  | 'audio/mp4'
+  | 'audio/mpeg'
+  | 'audio/webm; codecs=opus' // for safari
+  | 'audio/webm;codecs=opus'
+  | 'audio/ogg;codecs=opus'
+  | 'audio/m4a'
 
-  'application/pdf',
+  // PDF
+  | 'application/pdf'
 
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  // Microsoft Word
+  | 'application/msword'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // Microsoft Excel
+  | 'application/vnd.ms-excel'
+  | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  // Microsoft PowerPoint
+  | 'application/vnd.ms-powerpoint'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 
-  'application/vnd.oasis.opendocument.text',
-  'application/vnd.oasis.opendocument.spreadsheet',
-  'application/vnd.oasis.opendocument.presentation',
-] as const;
+  // OpenDocument
+  | 'application/vnd.oasis.opendocument.text'
+  | 'application/vnd.oasis.opendocument.spreadsheet'
+  | 'application/vnd.oasis.opendocument.presentation'
 
-export type UploadContentType = (typeof UPLOAD_CONTENT_TYPES)[number];
+  // GIS
+  | 'application/vnd.google-earth.kml+xml' // .kml
+  | 'application/vnd.google-earth.kmz' // .kmz
+  | 'application/vnd.shp' // .shp
+  | 'application/vnd.shx' // .shx
+  | 'application/vnd.dbf' // .dbf
+  | 'application/x-dbf'
+  | 'application/geo+json' // .geojson
+  | 'application/vnd.geo+json'
+  | 'application/gpx+xml' // .gpx
+  | 'application/x-gpx+xml'
+  | 'application/x-mapinfo-tab' // .tab
+
+  // Compressed files
+  | 'application/zip' // .zip
+  | 'application/x-zip-compressed'
+  | 'application/vnd.rar' // .rar
+  | 'application/x-rar-compressed'
+  | 'application/x-rar'
+  | 'application/x-tar' // .tar
+
+  // Installers
+  | 'application/vnd.android.package-archive' // .apk
+  | 'application/x-apple-diskimage' // .dmg
+
+  // 3D models
+  | 'model/vnd.collada+xml' // .dae
+  | 'application/vnd.google.sketchup' // .skp
+  | 'application/x-sketchup';
 
 export type UploadFile = {
   contentType: UploadContentType;
