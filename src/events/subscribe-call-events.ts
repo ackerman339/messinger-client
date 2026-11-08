@@ -4,23 +4,34 @@ import type { CallStore } from '../state/call-store';
 import type { CallLifecycle } from '../services/call-lifecycle';
 import type { createCallEventHandlers } from './call-events';
 import type { createNegotiationEventHandlers } from './negotiation-events';
+
 type CallHandlers = ReturnType<typeof createCallEventHandlers>;
 type NegotiationHandlers = ReturnType<typeof createNegotiationEventHandlers>;
-export function subscribeCallEvents(store: CallStore, lifecycle: CallLifecycle, calls: CallHandlers, negotiations: NegotiationHandlers) {
+
+export function subscribeCallEvents(
+  store: CallStore,
+  lifecycle: CallLifecycle,
+  calls: CallHandlers,
+  negotiations: NegotiationHandlers,
+) {
   const unsubscribe: (() => void)[] = [];
 
-  function on<K extends keyof CallServerPayloads>(event: K, handler: (data: CallServerPayloads[K]) => void | Promise<void>) {
-    unsubscribe.push(wsClient.on(event, async (data) => {
-      const session = store.getSession();
-      try {
-        await handler(data);
-      }
-      catch (error) {
-        if (session && store.live(session)) {
-          lifecycle.fail(session, error);
+  function on<K extends keyof CallServerPayloads>(
+    event: K,
+    handler: (data: CallServerPayloads[K]) => void | Promise<void>,
+  ) {
+    unsubscribe.push(
+      wsClient.on(event, async (data) => {
+        const session = store.getSession();
+        try {
+          await handler(data);
+        } catch (error) {
+          if (session && store.live(session)) {
+            lifecycle.fail(session, error);
+          }
         }
-      }
-    }));
+      }),
+    );
   }
   on('CALL_CREATED', calls.handleCreated);
   on('CALL_INCOMING', calls.handleIncoming);
@@ -36,15 +47,17 @@ export function subscribeCallEvents(store: CallStore, lifecycle: CallLifecycle, 
   on('CALL_ICE_CANDIDATE', negotiations.handleIceCandidate);
   on('CALL_NEGOTIATION_COMPLETED', negotiations.handleNegotiationCompleted);
   on('CALL_NEGOTIATION_END', negotiations.handleNegotiationEnd);
-  unsubscribe.push(wsClient.on('ERROR', data => {
-    const session = store.getSession();
-    if (!session || session.closed || !data?.error?.code?.includes('CALL_')) {
-      return;
-    }
-    // Errors lack operation IDs; refresh authority instead of guessing which operation failed.
-    store.publish(session, { error: data.error.message });
-    lifecycle.sync(session);
-  }));
+  unsubscribe.push(
+    wsClient.on('ERROR', (data) => {
+      const session = store.getSession();
+      if (!session || session.closed || !data?.error?.code?.includes('CALL_')) {
+        return;
+      }
+      // Errors lack operation IDs; refresh authority instead of guessing which operation failed.
+      store.publish(session, { error: data.error.message });
+      lifecycle.sync(session);
+    }),
+  );
 
   function onVisible() {
     const session = store.getSession();
@@ -55,7 +68,7 @@ export function subscribeCallEvents(store: CallStore, lifecycle: CallLifecycle, 
   document.addEventListener('visibilitychange', onVisible);
   const timer = setInterval(lifecycle.tick, 1000);
   return () => {
-    unsubscribe.forEach(off => off());
+    unsubscribe.forEach((off) => off());
     clearInterval(timer);
     document.removeEventListener('visibilitychange', onVisible);
     const session = store.getSession();
