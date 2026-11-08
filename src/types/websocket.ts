@@ -1,7 +1,9 @@
 import type { Message } from './conversation';
-import { CallClientPayloads, CallServerPayloads } from './call';
+import { CALL_CLIENT_EVENTS, CALL_SERVER_EVENTS } from './call';
+import type { CallClientPayloads, CallServerPayloads } from './call';
 
 export const WS_CLIENT_EVENTS = {
+  ...CALL_CLIENT_EVENTS,
   SEND_PRIVATE_MESSAGE: 'SEND_PRIVATE_MESSAGE',
   SEND_GROUP_MESSAGE: 'SEND_GROUP_MESSAGE',
   MESSAGE_DELIVERED: 'MESSAGE_DELIVERED',
@@ -14,6 +16,7 @@ export const WS_CLIENT_EVENTS = {
 } as const;
 
 export const WS_SERVER_EVENTS = {
+  ...CALL_SERVER_EVENTS,
   MESSAGE_SENT: 'MESSAGE_SENT',
   NEW_MESSAGE: 'NEW_MESSAGE',
   MESSAGE_STATUS_UPDATED: 'MESSAGE_STATUS_UPDATED',
@@ -48,7 +51,8 @@ export type WsErrorCode =
   | 'GROUP_INVITATION:CANNOT_INVITE_YOURSELF'
   | 'GROUP_INVITATION:USER_ALREADY_MEMBER'
   // Fallback for non-BaseException errors (see note below)
-  | 'UNHANDLED_WS_ERROR';
+  | 'UNHANDLED_WS_ERROR'
+  | `CALL_${string}`;
 
 export const MessageStatus = {
   SENT: 'SENT',

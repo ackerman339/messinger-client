@@ -3,6 +3,8 @@
 @theme {
   --color-accent: #54a9eb; /* primary blue - buttons, active states, own messages */
   --color-accent-hover: #4a99d6;
+  --color-danger: #ef505d; /* destructive actions, including ending a call */
+  --color-danger-hover: #db3c4a;
   --color-bg-app: #ffffff; /* main app background */
   --color-bg-sidebar: #ffffff; /* conversation list background */
   --color-bg-chat: #e6ebee; /* chat area background (Telegram's soft gray-blue) */
