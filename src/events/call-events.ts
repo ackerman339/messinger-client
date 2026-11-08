@@ -73,6 +73,8 @@ export function createCallEventHandlers(
       expiresAt: data.connectionExpiresAt,
       notice: data.isSelectedConnection ? undefined : 'Llamada atendida en otro dispositivo',
     });
+    session.notificationAction = undefined;
+    store.publish(session, { answering: false });
     session.deadline = data.connectionExpiresAt;
     if (!data.isSelectedConnection) {
       lifecycle.cleanup(session);
@@ -133,6 +135,13 @@ export function createCallEventHandlers(
     }
     const call = data.call;
     session.view.callId = call.callId;
+    const notificationAction = session.notificationAction;
+    // Metadata, not the notification payload, determines role, participant and initial media.
+    store.publish(session, {
+      participantId: call.role === 'CALLEE' ? call.callerId : call.calleeId,
+      incoming: call.role === 'CALLEE',
+      media: call.media,
+    });
     if (call.isTerminal || isTerminal(call.status)) {
       lifecycle.finish(session, call.status);
       return;
@@ -144,12 +153,36 @@ export function createCallEventHandlers(
     session.deadline = call.recoveryExpiresAt ?? call.connectionExpiresAt;
     store.publish(session, {
       status: call.status,
+      answering: call.status === 'ringing' && session.view.answering,
       selected: call.isSelectedConnection,
       connectedAt: call.connectedAt,
       expiresAt: call.expiresAt ?? session.deadline,
     });
     if (!call.isSelectedConnection) {
       lifecycle.cleanup(session);
+    }
+    if (notificationAction) {
+      session.notificationAction = undefined;
+      const stillRinging = call.status === 'ringing' && call.role === 'CALLEE';
+      const expired = !!call.expiresAt && Date.parse(call.expiresAt) <= Date.now();
+      if (stillRinging && !expired && !session.notificationResponseSent) {
+        session.notificationResponseSent = true;
+        if (notificationAction === 'reject') {
+          lifecycle.end(true);
+        } else {
+          store.publish(session, { notice: 'Atendiendo llamada…' });
+          lifecycle.accept();
+        }
+      } else {
+        if (stillRinging && expired) {
+          lifecycle.finish(session, 'missed', 'La llamada ya expiró.');
+          return;
+        }
+        store.publish(session, {
+          answering: false,
+          notice: 'Esta llamada ya no está disponible para atender.',
+        });
+      }
     }
     if (data.negotiation && call.isSelectedConnection) {
       if (session.negotiation?.negotiationId !== data.negotiation.negotiationId) {

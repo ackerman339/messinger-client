@@ -19,6 +19,8 @@ export function createCallClient() {
     subscribe: store.subscribe,
     start: lifecycle.start,
     accept: lifecycle.accept,
+    answerFromNotification: lifecycle.answerFromNotification,
+    rejectFromNotification: lifecycle.rejectFromNotification,
     end: lifecycle.end,
     toggle: lifecycle.toggle,
     dismiss: store.dismiss,

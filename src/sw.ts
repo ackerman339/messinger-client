@@ -55,10 +55,17 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
-  const { type, conversationId } = event.notification.data ?? {};
+  const { type, conversationId, callId } = event.notification.data ?? {};
 
   if (type === 'call-incoming' || type === 'call-missed') {
-    event.waitUntil(openOrFocusCallWindow());
+    const action =
+      type === 'call-incoming' &&
+      (event.action === '' || event.action === 'accept' || event.action === 'reject')
+        ? event.action === 'reject'
+          ? 'reject'
+          : 'accept'
+        : undefined;
+    event.waitUntil(openOrFocusCallWindow(action ? callId : undefined, action));
     return;
   }
 
@@ -119,14 +126,51 @@ async function openOrFocusWindow(url: string) {
 }
 
 // Focusing the current chat preserves its selected WebSocket and active peer.
-async function openOrFocusCallWindow() {
+async function openOrFocusCallWindow(callId?: string, action?: 'accept' | 'reject') {
+  const validCallId =
+    typeof callId === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callId);
+  const parameter = action === 'reject' ? 'rejectCall' : 'answerCall';
+  const url = validCallId && action ? `/chat?${parameter}=${encodeURIComponent(callId)}` : '/chat';
   const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-  const chatClient = windowClients.find((client) => new URL(client.url).pathname === '/chat');
+  const chatClients = windowClients.filter((client) => new URL(client.url).pathname === '/chat');
+  const chatClient = chatClients.find((client) => client.focused) ?? chatClients[0];
   if (chatClient) {
-    await chatClient.focus();
-    return;
+    if (action !== 'reject') await chatClient.focus();
+    if (!validCallId || !action || (await deliverCallAction(chatClient, callId, action))) return;
+    // A tab still loading may not have the listener yet. Preserve it and open a cold-start URL.
   }
-  await self.clients.openWindow('/chat');
+  await self.clients.openWindow(url);
+}
+
+function deliverCallAction(
+  client: WindowClient,
+  callId: string,
+  action: 'accept' | 'reject',
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel();
+    const finish = (received: boolean) => {
+      clearTimeout(timeout);
+      channel.port1.close();
+      channel.port2.close();
+      resolve(received);
+    };
+    const timeout = setTimeout(() => finish(false), 1200);
+    channel.port1.onmessage = (event) => {
+      if (
+        event.data?.type === 'CALL_NOTIFICATION_RECEIVED' &&
+        event.data.callId === callId &&
+        event.data.action === action
+      )
+        finish(true);
+    };
+    try {
+      client.postMessage({ type: 'CALL_NOTIFICATION_ACTION', callId, action }, [channel.port2]);
+    } catch {
+      finish(false);
+    }
+  });
 }
 
 interface CallPushPayload {
@@ -156,5 +200,11 @@ async function showCallPushNotification({ title, body, icon, data }: CallPushPay
     data,
     tag: `messinger:${data.type}:${data.callId}`,
     requireInteraction: incoming,
+    ...(incoming && {
+      actions: [
+        { action: 'accept', title: 'Aceptar' },
+        { action: 'reject', title: 'Rechazar' },
+      ],
+    }),
   });
 }

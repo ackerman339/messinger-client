@@ -14,6 +14,7 @@ export function getCallNotificationPermission(): CallNotificationPermission {
 async function showCallNotification(
   kind: CallNotificationKind,
   call: CallView & { callId: string },
+  onAnswer?: (callId: string) => void,
 ): Promise<NotificationHandle | undefined> {
   if (getCallNotificationPermission() !== 'granted') return;
 
@@ -22,9 +23,7 @@ async function showCallNotification(
   const media = call.media === 'video' ? 'videollamada' : 'llamada de voz';
   const tag = `messinger:${kind}:${call.callId}`;
   const options: NotificationOptions = {
-    body: incoming
-      ? `Tienes una ${media}. Abre Messinger para contestar.`
-      : `No contestaste una ${media}.`,
+    body: incoming ? `Tienes una ${media}. Pulsa para atender.` : `No contestaste una ${media}.`,
     icon: `${import.meta.env.BASE_URL}pwa-192x192.png`,
     tag,
     requireInteraction: incoming,
@@ -38,7 +37,15 @@ async function showCallNotification(
       'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined;
 
     if (registration?.active) {
-      await registration.showNotification(title, options);
+      await registration.showNotification(title, {
+        ...options,
+        ...(incoming && {
+          actions: [
+            { action: 'accept', title: 'Aceptar' },
+            { action: 'reject', title: 'Rechazar' },
+          ],
+        }),
+      });
       return {
         close: () => {
           void registration
@@ -58,6 +65,7 @@ async function showCallNotification(
       event.preventDefault();
       window.focus();
       notification.close();
+      if (incoming) onAnswer?.(call.callId);
     };
     return { close: () => notification.close() };
   } catch {
@@ -66,8 +74,8 @@ async function showCallNotification(
   }
 }
 
-/** Observes authoritative call state; it never accepts calls or requests permissions. */
-export function createCallNotifications() {
+/** Observes call state and manages incoming and missed notifications. */
+export function createCallNotifications(onAnswer?: (callId: string) => void) {
   const incomingShown = new Set<string>();
   const incomingPending = new Set<string>();
   const missedShown = new Set<string>();
@@ -92,6 +100,7 @@ export function createCallNotifications() {
     const ringing =
       call?.incoming &&
       call.status === 'ringing' &&
+      !call.answering &&
       (!call.expiresAt || Date.parse(call.expiresAt) > Date.now());
     const nextId = ringing ? call.callId : undefined;
     if (ringingId !== nextId) {
@@ -114,7 +123,7 @@ export function createCallNotifications() {
 
     if (ringing && !incomingShown.has(callId) && !incomingPending.has(callId)) {
       incomingPending.add(callId);
-      void showCallNotification('call-incoming', notificationCall).then((handle) => {
+      void showCallNotification('call-incoming', notificationCall, onAnswer).then((handle) => {
         incomingPending.delete(callId);
         if (!handle) return;
         if (!active || ringingId !== callId) {
