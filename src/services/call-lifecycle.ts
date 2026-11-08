@@ -1,0 +1,130 @@
+import { createCallSession } from '../state/call-session';
+import type { CallMedia, CallStatus } from '../types/call';
+import type { CallStore } from '../state/call-store';
+import type { CallSession as Session } from '../state/call-session';
+import { wsClient } from '@/clients/websocket-client';
+export function createCallLifecycle(store: CallStore) {
+
+  function start(participantId: string, media: CallMedia) {
+    const current = store.getSession();
+    if (current && !current.closed) {
+      return;
+    }
+    const session = createCallSession({ participantId, media, incoming: false, status: 'requesting', selected: true, muted: false, cameraOff: false }, crypto.randomUUID());
+    store.setSession(session);
+    store.publish(session);
+    wsClient.emit('CALL_INIT', { requestId: session.requestId!, calleeId: participantId, media });
+  }
+
+  function accept() {
+    const session = store.getSession();
+    if (session && store.live(session) && session.view.callId && session.view.status === 'ringing') {
+      wsClient.emit('CALL_ACCEPT', { callId: session.view.callId });
+    }
+  }
+
+  function end(reject = false) {
+    const session = store.getSession();
+    if (!session || session.closed) {
+      return;
+    }
+    session.cancelled = true;
+    cleanup(session);
+    if (session.view.callId) {
+      wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', { callId: session.view.callId });
+      finish(session, reject ? 'rejected' : 'ended');
+    }
+    else {
+      store.publish(session, { notice: 'Cancelando llamada…' });
+      sync(session);
+    }
+  }
+
+  function toggle(kind: 'audio' | 'video') {
+    const session = store.getSession();
+    if (!session || !store.live(session)) {
+      return;
+    }
+    const enabled = session.rtc.toggle(kind);
+    if (enabled === undefined) {
+      return;
+    }
+    store.publish(session, kind === 'audio' ? { muted: !enabled } : { cameraOff: !enabled });
+  }
+
+  function sync(session: Session) {
+    if (session.closed) {
+      return;
+    }
+    session.syncId = crypto.randomUUID();
+    session.nextSync = Date.now() + 5000;
+    if (session.view.callId) {
+      wsClient.emit('CALL_SYNC', { syncId: session.syncId, callId: session.view.callId });
+    }
+    else {
+      if (session.requestId) {
+        wsClient.emit('CALL_SYNC', { syncId: session.syncId, requestId: session.requestId });
+      }
+    }
+  }
+
+  function tick() {
+    const session = store.getSession();
+    if (!session || session.closed) {
+      return;
+    }
+    const now = Date.now();
+    if (now >= session.nextSync) {
+      sync(session);
+    }
+    if (session.view.status === 'ringing' && !session.view.incoming && session.view.selected && session.view.expiresAt && now >= Date.parse(session.view.expiresAt) && !session.timeoutSent) {
+      session.timeoutSent = true;
+      wsClient.emit('CALL_TIMEOUT', { callId: session.view.callId! });
+      sync(session);
+    }
+    if (!store.live(session) || !session.negotiation) {
+      return;
+    }
+    const result = session.delivery.retry(session.view.callId!, session.negotiation.negotiationId, now, session.negotiation.expiresAt ?? session.deadline);
+    if (result === 'exhausted') {
+      store.publish(session, { error: 'No se confirmó la entrega de la señal. Consultando el estado.' });
+    }
+    if (result) {
+      sync(session);
+    }
+  }
+
+  function cleanup(session: Session) {
+    session.delivery.clear();
+    session.candidates.clear();
+    session.rtc.close();
+  }
+
+  function finish(session: Session, status: CallStatus = 'ended', notice?: string) {
+    if (session.closed) {
+      return;
+    }
+    session.closed = true;
+    if (session.view.callId) {
+      store.terminalIds.add(session.view.callId);
+    }
+    cleanup(session);
+    store.publish(session, { status, notice, local: undefined, remote: undefined, selected: false });
+  }
+
+  function fail(session: Session, error: unknown) {
+    const message = error instanceof Error ? error.message : 'No se pudo establecer la llamada';
+    store.publish(session, { error: message });
+    if (session.view.status !== 'connected') {
+      if (session.view.callId) {
+        wsClient.emit('CALL_END', { callId: session.view.callId });
+      }
+      finish(session, 'failed');
+    }
+    else {
+      sync(session);
+    }
+  }
+  return { start, accept, end, toggle, sync, tick, cleanup, finish, fail };
+}
+export type CallLifecycle = ReturnType<typeof createCallLifecycle>;
