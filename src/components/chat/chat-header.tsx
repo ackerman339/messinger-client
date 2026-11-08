@@ -1,3 +1,4 @@
+import { CallButtons } from '@/calls/componentes/call-buttons';
 import { Avatar, DropdownMenu } from 'radix-ui';
 import { ArrowLeft, EllipsisVertical, MicSignal, BrushCleaning } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
@@ -50,7 +51,9 @@ export function ChatHeader() {
       </div>
 
       <div className='flex items-center gap-1'>
-        {/*  <HeaderButton label='Search' icon={<Search />} /> */}
+        {activeConversation.type === 'PRIVATE' && privateConversationMember && (
+          <CallButtons participantId={privateConversationMember.userId} />
+        )}
         <HeaderButton />
       </div>
     </header>
