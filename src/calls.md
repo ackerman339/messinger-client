@@ -60,6 +60,24 @@ El cliente WebSocket conserva su API original (`emit` y `on`). Las llamadas no o
 
 El panel usa una presentación oscura con avatar, nombre del participante disponible en las conversaciones y controles circulares. En móvil ocupa toda la pantalla; en escritorio aparece como un diálogo centrado con navegación de teclado y foco contenido. El video remoto ocupa el fondo y el local aparece como miniatura.
 
-`hooks/use-incoming-call-sound.ts` reproduce el tono únicamente mientras la llamada sea entrante y esté en `ringing`. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, el panel permite activar el sonido mediante interacción.
+`hooks/use-incoming-call-sound.ts` reproduce el tono únicamente mientras la llamada sea entrante y esté en `ringing`. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, se reintenta al interactuar con la aplicación.
 
 `services/call-ringtone.ts` administra la reproducción en bucle y su limpieza. `public/sounds/incoming-call.wav` es un tono original generado para la aplicación; no utiliza el audio de WhatsApp ni requiere descargas externas.
+
+## Notificaciones de llamadas
+
+Los avisos de llamadas reutilizan el permiso de notificaciones y la suscripción push gestionados por UserProvider. No hay una activación independiente en el menú de llamadas.
+
+`services/call-notifications.ts` observa los snapshots en la suscripción de `CallProvider`. Muestra una notificación entrante por llamada y la cierra al dejar de sonar o expirar. Muestra una notificación perdida cuando el servidor indica `missed` o `NO_ANSWER`, incluso por sincronización. Rechazar, atender en otro dispositivo y realizar llamadas salientes no producen avisos de llamada perdida.
+
+Se utiliza `ServiceWorkerRegistration.showNotification` si existe un worker activo. Las notificaciones entrantes incluyen **Aceptar** y **Rechazar**; las perdidas solo abren el chat. Pulsar el cuerpo de un aviso entrante equivale a Aceptar: abre el chat y atiende la llamada después de consultar su estado. En escritorio/desarrollo, `Notification` sirve como alternativa sin botones, y su clic también entrega la intención de aceptar al cliente. La presentación de las acciones depende del navegador y del sistema operativo.
+
+Los avisos recibidos por push se muestran en `sw.ts`, incluso con la aplicación cerrada. El worker y el cliente utilizan la misma etiqueta por tipo de aviso y callId para reemplazar notificaciones repetidas. La push perdida cierra el aviso entrante de esa llamada. La suscripción sigue siendo administrada por UserProvider; denegar el permiso no impide recibir llamadas dentro de la interfaz.
+
+## Responder desde una notificación
+
+El service worker entrega la acción elegida (Aceptar también al pulsar el cuerpo) mediante `CALL_NOTIFICATION_ACTION` y un MessageChannel con confirmación. Aceptar enfoca el chat; Rechazar puede entregarse a un chat abierto en segundo plano. No se recarga una pestaña activa. Si no hay chat listo, se abre `/chat?answerCall=<callId>` o `/chat?rejectCall=<callId>`. El hook `use-notification-call-action.ts` consume la intención una sola vez y conserva los demás parámetros de navegación.
+
+`answerFromNotification` y `rejectFromNotification` guardan la intención y solicitan CALL_SYNC. El snapshot del servidor determina participante, rol, medio y estado. Solo se envía CALL_ACCEPT o CALL_REJECT cuando la llamada sigue timbrando para el receptor y no ha expirado. No se toma una llamada atendida en otra conexión ni se reemplaza una llamada local distinta. Las respuestas repetidas no duplican el envío. No se cambian la autenticación ni la API del cliente WebSocket.
+
+Mientras se consulta/responde no se muestra otro aviso entrante. Una consulta sin respuesta cancela la intención a los 15 segundos. Los permisos de micrófono/cámara siguen siendo gestionados por el navegador. Con la app cerrada, Rechazar necesita abrirla para autenticar y enviar la respuesta mediante el WebSocket existente.

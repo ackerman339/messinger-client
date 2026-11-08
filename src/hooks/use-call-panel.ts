@@ -25,10 +25,14 @@ export function useCallPanel() {
   }, [hasCall]);
 
   const terminal = !!call && call.status !== 'requesting' && isTerminal(call.status);
-  const canAccept = call?.incoming === true && call.status === 'ringing';
+  const canAccept = call?.incoming === true && call.status === 'ringing' && !call.answering;
   const labels = {
-    requesting: 'Iniciando llamada…',
-    ringing: call?.incoming ? 'Llamada entrante' : 'Llamando…',
+    requesting: call?.incoming ? 'Consultando llamada…' : 'Iniciando llamada…',
+    ringing: call?.answering
+      ? (call.notice ?? 'Procesando llamada…')
+      : call?.incoming
+        ? 'Llamada entrante'
+        : 'Llamando…',
     accepted: 'Conectando…',
     connected: 'Llamada conectada',
     ended: 'Llamada finalizada',
@@ -37,7 +41,7 @@ export function useCallPanel() {
     failed: 'La llamada falló',
   };
 
-  const { soundBlocked, enableSound } = useIncomingCallSound(canAccept, call?.callId);
+  useIncomingCallSound(canAccept, call?.callId);
   let participantName = 'Contacto';
   for (const conversation of conversations.values()) {
     const member = conversation.members.find((member) => member.userId === call?.participantId);
@@ -65,8 +69,6 @@ export function useCallPanel() {
     participantName,
     initials,
     duration,
-    soundBlocked,
-    enableSound,
     terminal,
     canAccept,
     canEnd: !!call && !terminal && !canAccept,

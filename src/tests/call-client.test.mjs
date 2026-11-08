@@ -247,3 +247,290 @@ test('stopping an incoming call silences a late playback result', async t => {
   assert.equal(audio.currentTime, 0);
   assert.equal(audio.pauses, 2);
 });
+
+const { createCallNotifications } = await import(loadModuleUrl(new URL('../services/call-notifications.ts', import.meta.url)));
+const incomingView = { ...incoming, participantId: incoming.callerId, incoming: true, selected: false, status: 'ringing', muted: false, cameraOff: false };
+function mockNotifications(t, permission = 'granted', registration, onAnswer) {
+  const originalWindow = globalThis.window;
+  const originalNotification = globalThis.Notification;
+  const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const shown = [];
+  const permissionRequests = [];
+  function BrowserNotification(title, options) {
+    const notification = { title, options, closed: false, close() { this.closed = true; } };
+    shown.push(notification);
+    return notification;
+  }
+  BrowserNotification.permission = permission;
+  BrowserNotification.requestPermission = () => { permissionRequests.push(true); return Promise.resolve('granted'); };
+  globalThis.Notification = BrowserNotification;
+  globalThis.window = { Notification: BrowserNotification, focus() {} };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { serviceWorker: { getRegistration: async () => registration } } });
+  t.after(() => {
+    globalThis.window = originalWindow;
+    globalThis.Notification = originalNotification;
+    if (originalNavigator) Object.defineProperty(globalThis, 'navigator', originalNavigator);
+    else delete globalThis.navigator;
+  });
+  const notifications = createCallNotifications(onAnswer);
+  t.after(() => notifications.dispose());
+  return { notifications, shown, permissionRequests };
+}
+test('incoming notification is deduplicated and closes when accepted', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update(incomingView);
+  notifications.update(incomingView);
+  await flush();
+  assert.equal(shown.length, 1);
+  assert.equal(shown[0].title, 'Llamada entrante');
+  notifications.update({ ...incomingView, status: 'accepted' });
+  assert.ok(shown[0].closed);
+  notifications.update({ ...incomingView, status: 'ended' });
+  await flush();
+  assert.equal(shown.length, 1);
+});
+test('unanswered incoming call replaces ringing notice with one missed notification', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update(incomingView);
+  await flush();
+  notifications.update({ ...incomingView, status: 'missed' });
+  notifications.update({ ...incomingView, status: 'missed' });
+  await flush();
+  assert.equal(shown.length, 2);
+  assert.ok(shown[0].closed);
+  assert.equal(shown[1].title, 'Llamada perdida');
+  assert.notEqual(shown[0].options.tag, shown[1].options.tag);
+});
+test('missed state recovered by sync notifies without a preceding incoming event', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update({ ...incomingView, status: 'missed' });
+  await flush();
+  assert.equal(shown[0].title, 'Llamada perdida');
+});
+test('ended, rejected and outgoing calls do not invent a missed server state', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update(incomingView);
+  notifications.update({ ...incomingView, status: 'ended' });
+  notifications.update({ ...incomingView, callId: 'outgoing', incoming: false, status: 'missed' });
+  notifications.update({ ...incomingView, callId: 'rejected' });
+  notifications.update({ ...incomingView, callId: 'rejected', status: 'rejected' });
+  await flush();
+  assert.equal(shown.filter(item => item.title === 'Llamada perdida').length, 0);
+});
+test('permission is requested only by user action and can be granted during ringing', async t => {
+  const { notifications, shown, permissionRequests } = mockNotifications(t, 'default');
+  notifications.update(incomingView);
+  await flush();
+  assert.equal(shown.length, 0);
+  assert.equal(permissionRequests.length, 0);
+  Notification.permission = 'granted';
+  notifications.update(incomingView);
+  await flush();
+  assert.equal(shown.length, 1);
+});
+test('unsupported notifications never interrupt the call observer', t => {
+  const { notifications, shown } = mockNotifications(t);
+  delete window.Notification;
+  notifications.update(incomingView);
+  notifications.update({ ...incomingView, status: 'missed' });
+  assert.equal(shown.length, 0);
+});
+test('late service-worker notification is closed after the call was accepted', async t => {
+  let resolveShow;
+  const closed = [];
+  const registration = {
+    active: {},
+    showNotification: () => new Promise(resolve => { resolveShow = resolve; }),
+    getNotifications: async ({ tag }) => [{ close() { closed.push(tag); } }],
+  };
+  const { notifications, shown } = mockNotifications(t, 'granted', registration);
+  notifications.update(incomingView);
+  await flush();
+  notifications.update({ ...incomingView, status: 'accepted' });
+  resolveShow();
+  await flush();
+  assert.equal(shown.length, 0);
+  assert.deepEqual(closed, [`messinger:call-incoming:${incomingView.callId}`]);
+});
+test('disposed call notifications close pending and already visible notices', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update(incomingView);
+  await flush();
+  notifications.update({ ...incomingView, status: 'missed' });
+  notifications.dispose();
+  await flush();
+  assert.ok(shown.every(item => item.closed));
+});
+
+test('NO_ANSWER without a status still resolves to a missed incoming call', t => {
+  const client = setup(t);
+  events.get('CALL_INCOMING')(incoming);
+  events.get('CALL_END')({ callId: incoming.callId, reason: 'NO_ANSWER' });
+  assert.equal(client.getSnapshot().status, 'missed');
+});
+
+const answerCallId = '97070838-624d-4a5b-b677-c9ecbd7f4b50';
+function replyToNotificationSync(patch = {}) {
+  const sync = sent.findLast(item => item.type === 'CALL_SYNC');
+  const call = {
+    callId: answerCallId, callerId: 'caller', calleeId: 'callee', role: 'CALLEE',
+    media: 'video', status: 'ringing', isTerminal: false, isSelectedConnection: false,
+    expiresAt: new Date(Date.now() + 30000).toISOString(), ...patch,
+  };
+  events.get('CALL_STATE')({ syncId: sync.data.syncId, call, negotiation: null });
+}
+test('cold-start notification click syncs before accepting and restores video metadata', t => {
+  const client = setup(t);
+  client.answerFromNotification(answerCallId);
+  assert.deepEqual(sent.map(item => item.type), ['CALL_SYNC']);
+  replyToNotificationSync();
+  assert.deepEqual(sent.map(item => item.type), ['CALL_SYNC', 'CALL_ACCEPT']);
+  assert.deepEqual(sent[1].data, { callId: answerCallId });
+  assert.equal(client.getSnapshot().media, 'video');
+  assert.equal(client.getSnapshot().participantId, 'caller');
+  assert.equal(client.getSnapshot().selected, false);
+});
+test('notification clicks do not reaccept a call or apply late sync responses', t => {
+  const client = setup(t);
+  client.answerFromNotification(answerCallId);
+  const staleSync = sent[0].data.syncId;
+  client.answerFromNotification(answerCallId);
+  replyToNotificationSync();
+  replyToNotificationSync();
+  client.answerFromNotification(answerCallId);
+  assert.equal(sent.filter(item => item.type === 'CALL_ACCEPT').length, 1);
+  assert.equal(sent[0].data.syncId, staleSync);
+});
+for (const patch of [
+  { status: 'ended', isTerminal: true },
+  { status: 'missed', isTerminal: true },
+  { status: 'accepted', isSelectedConnection: false },
+  { role: 'CALLER' },
+  { expiresAt: new Date(0).toISOString() },
+]) {
+  test(`notification answer rejects unavailable server state ${JSON.stringify(patch)}`, t => {
+    const client = setup(t);
+    client.answerFromNotification(answerCallId);
+    replyToNotificationSync(patch);
+    assert.ok(!sent.some(item => item.type === 'CALL_ACCEPT'));
+  });
+}
+test('an unrelated active call is never replaced by a notification click', t => {
+  const client = setup(t);
+  client.start('other', 'audio');
+  client.answerFromNotification(answerCallId);
+  assert.deepEqual(sent.map(item => item.type), ['CALL_INIT']);
+});
+test('notification answer retries sync while waiting for the selected WebSocket to be ready', t => {
+  const client = setup(t);
+  client.answerFromNotification(answerCallId);
+  const originalNow = Date.now;
+  t.after(() => { Date.now = originalNow; });
+  Date.now = () => originalNow() + 6000;
+  tick();
+  assert.equal(sent.filter(item => item.type === 'CALL_SYNC').length, 2);
+  assert.notEqual(sent[0].data.syncId, sent[1].data.syncId);
+  replyToNotificationSync();
+  assert.equal(sent.filter(item => item.type === 'CALL_ACCEPT').length, 1);
+});
+test('canceling a pending notification answer prevents late snapshots from accepting', t => {
+  const client = setup(t);
+  client.answerFromNotification(answerCallId);
+  client.end();
+  replyToNotificationSync();
+  assert.ok(!sent.some(item => item.type === 'CALL_ACCEPT'));
+});
+test('malformed notification identifiers are ignored before signaling', t => {
+  const client = setup(t);
+  client.answerFromNotification('not-a-uuid');
+  assert.equal(sent.length, 0);
+});
+
+test('native fallback body clicks answer incoming calls but only open missed calls', async t => {
+  const answered = [];
+  const { notifications, shown } = mockNotifications(t, 'granted', undefined, id => answered.push(id));
+  let focused = 0;
+  window.focus = () => { focused++; };
+  notifications.update(incomingView);
+  await flush();
+  assert.equal(shown[0].options.actions, undefined);
+  shown[0].onclick({ preventDefault() {} });
+  assert.equal(focused, 1);
+  assert.deepEqual(answered, [incomingView.callId]);
+  assert.ok(shown[0].closed);
+  notifications.update({ ...incomingView, status: 'missed' });
+  await flush();
+  shown[1].onclick({ preventDefault() {} });
+  assert.equal(focused, 2);
+  assert.deepEqual(answered, [incomingView.callId]);
+});
+test('answer intent never creates a second incoming notification', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update({ ...incomingView, answering: true });
+  await flush();
+  assert.equal(shown.length, 0);
+});
+test('notification answer times out without late automatic acceptance', t => {
+  const client = setup(t);
+  client.answerFromNotification(answerCallId);
+  const originalNow = Date.now;
+  t.after(() => { Date.now = originalNow; });
+  Date.now = () => originalNow() + 16000;
+  tick();
+  replyToNotificationSync();
+  assert.ok(!sent.some(item => item.type === 'CALL_ACCEPT'));
+  assert.equal(client.getSnapshot().status, 'failed');
+});
+
+test('local service-worker notifications expose actions only for incoming calls', async t => {
+  const shown = [];
+  const registration = {
+    active: {},
+    showNotification: async (title, options) => shown.push({ title, options }),
+    getNotifications: async () => [],
+  };
+  const { notifications } = mockNotifications(t, 'granted', registration);
+  notifications.update(incomingView);
+  await flush();
+  assert.deepEqual(shown[0].options.actions, [
+    { action: 'accept', title: 'Aceptar' },
+    { action: 'reject', title: 'Rechazar' },
+  ]);
+  notifications.update({ ...incomingView, status: 'missed' });
+  await flush();
+  assert.equal(shown[1].options.actions, undefined);
+});
+test('notification rejection syncs before rejecting, without accepting or requesting media', t => {
+  const client = setup(t);
+  client.rejectFromNotification(answerCallId);
+  client.rejectFromNotification(answerCallId);
+  client.answerFromNotification(answerCallId);
+  assert.deepEqual(sent.map(item => item.type), ['CALL_SYNC']);
+  replyToNotificationSync();
+  replyToNotificationSync();
+  client.rejectFromNotification(answerCallId);
+  assert.deepEqual(sent.map(item => item.type), ['CALL_SYNC', 'CALL_REJECT']);
+  assert.deepEqual(sent[1].data, { callId: answerCallId });
+  assert.equal(client.getSnapshot().status, 'rejected');
+  assert.equal(client.getSnapshot().local, undefined);
+});
+for (const patch of [
+  { status: 'ended', isTerminal: true },
+  { status: 'missed', isTerminal: true },
+  { status: 'accepted', isSelectedConnection: false },
+  { role: 'CALLER' },
+  { expiresAt: new Date(0).toISOString() },
+]) {
+  test(`notification rejection ignores unavailable state ${JSON.stringify(patch)}`, t => {
+    const client = setup(t);
+    client.rejectFromNotification(answerCallId);
+    replyToNotificationSync(patch);
+    assert.ok(!sent.some(item => item.type === 'CALL_REJECT' || item.type === 'CALL_ACCEPT'));
+  });
+}
+test('notification rejection cannot replace an unrelated active call', t => {
+  const client = setup(t);
+  client.start('other', 'audio');
+  client.rejectFromNotification(answerCallId);
+  assert.deepEqual(sent.map(item => item.type), ['CALL_INIT']);
+});

@@ -1,15 +1,29 @@
+import { createCallSession } from '../state/call-session';
+import { isTerminal } from '../types/call';
+import { wsClient } from '@/clients/websocket-client';
+
 import type { CallServerPayloads } from '../types/call';
 import type { CallLifecycle } from '../services/call-lifecycle';
 import type { CallNegotiation } from '../services/call-negotiation';
-import { createCallSession } from '../state/call-session';
-import { isTerminal } from '../types/call';
 import type { CallStore } from '../state/call-store';
-import { wsClient } from '@/clients/websocket-client';
-export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecycle, negotiation: CallNegotiation) {
 
+export function createCallEventHandlers(
+  store: CallStore,
+  lifecycle: CallLifecycle,
+  negotiation: CallNegotiation,
+) {
   function handleCreated(data: CallServerPayloads['CALL_CREATED']) {
     const session = store.getSession();
-    if (store.terminalIds.has(data.callId) || !session || session.closed || session.view.incoming || session.view.callId || data.calleeId !== session.view.participantId || (data.requestId && data.requestId !== session.requestId)) {
+
+    if (
+      store.terminalIds.has(data.callId) ||
+      !session ||
+      session.closed ||
+      session.view.incoming ||
+      session.view.callId ||
+      data.calleeId !== session.view.participantId ||
+      (data.requestId && data.requestId !== session.requestId)
+    ) {
       return;
     }
     session.view.callId = data.callId;
@@ -29,8 +43,17 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
     if (current && !current.closed) {
       return;
     }
-    const session = createCallSession({ callId: data.callId, participantId: data.callerId, incoming: true,
-      media: data.media, status: 'ringing', selected: false, expiresAt: data.expiresAt, muted: false, cameraOff: false });
+    const session = createCallSession({
+      callId: data.callId,
+      participantId: data.callerId,
+      incoming: true,
+      media: data.media,
+      status: 'ringing',
+      selected: false,
+      expiresAt: data.expiresAt,
+      muted: false,
+      cameraOff: false,
+    });
     store.setSession(session);
     store.publish(session);
   }
@@ -44,8 +67,14 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
       wsClient.emit('CALL_END', { callId: data.callId });
       return;
     }
-    store.publish(session, { status: data.status, selected: data.isSelectedConnection, expiresAt: data.connectionExpiresAt,
-      notice: data.isSelectedConnection ? undefined : 'Llamada atendida en otro dispositivo' });
+    store.publish(session, {
+      status: data.status,
+      selected: data.isSelectedConnection,
+      expiresAt: data.connectionExpiresAt,
+      notice: data.isSelectedConnection ? undefined : 'Llamada atendida en otro dispositivo',
+    });
+    session.notificationAction = undefined;
+    store.publish(session, { answering: false });
     session.deadline = data.connectionExpiresAt;
     if (!data.isSelectedConnection) {
       lifecycle.cleanup(session);
@@ -53,7 +82,11 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
     }
     if (data.shouldInitiateNegotiation && !session.negotiationRequest && !session.negotiation) {
       session.negotiationRequest = crypto.randomUUID();
-      wsClient.emit('CALL_NEGOTIATION_INIT', { callId: data.callId, requestId: session.negotiationRequest, type: 'INITIAL' });
+      wsClient.emit('CALL_NEGOTIATION_INIT', {
+        callId: data.callId,
+        requestId: session.negotiationRequest,
+        type: 'INITIAL',
+      });
     }
   }
 
@@ -67,7 +100,11 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
   function handleEnd(data: CallServerPayloads['CALL_END']) {
     const session = store.match(data.callId);
     if (session) {
-      lifecycle.finish(session, data.status ?? 'ended', data.reason);
+      lifecycle.finish(
+        session,
+        data.status ?? (data.reason === 'NO_ANSWER' ? 'missed' : 'ended'),
+        data.reason,
+      );
     }
   }
 
@@ -77,16 +114,34 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
       return;
     }
     session.deadline = data.connectionExpiresAt;
-    store.publish(session, { status: data.status, connectedAt: data.connectedAt, expiresAt: data.connectionExpiresAt });
+    store.publish(session, {
+      status: data.status,
+      connectedAt: data.connectedAt,
+      expiresAt: data.connectionExpiresAt,
+    });
   }
 
   function handleState(data: CallServerPayloads['CALL_STATE']) {
     const session = store.getSession();
-    if (!session || session.closed || session.syncId !== data.syncId || (session.view.callId ? session.view.callId !== data.call.callId : session.requestId !== data.call.requestId)) {
+    if (
+      !session ||
+      session.closed ||
+      session.syncId !== data.syncId ||
+      (session.view.callId
+        ? session.view.callId !== data.call.callId
+        : session.requestId !== data.call.requestId)
+    ) {
       return;
     }
     const call = data.call;
     session.view.callId = call.callId;
+    const notificationAction = session.notificationAction;
+    // Metadata, not the notification payload, determines role, participant and initial media.
+    store.publish(session, {
+      participantId: call.role === 'CALLEE' ? call.callerId : call.calleeId,
+      incoming: call.role === 'CALLEE',
+      media: call.media,
+    });
     if (call.isTerminal || isTerminal(call.status)) {
       lifecycle.finish(session, call.status);
       return;
@@ -96,16 +151,43 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
       return;
     }
     session.deadline = call.recoveryExpiresAt ?? call.connectionExpiresAt;
-    store.publish(session, { status: call.status, selected: call.isSelectedConnection,
-      connectedAt: call.connectedAt, expiresAt: call.expiresAt ?? session.deadline });
+    store.publish(session, {
+      status: call.status,
+      answering: call.status === 'ringing' && session.view.answering,
+      selected: call.isSelectedConnection,
+      connectedAt: call.connectedAt,
+      expiresAt: call.expiresAt ?? session.deadline,
+    });
     if (!call.isSelectedConnection) {
       lifecycle.cleanup(session);
+    }
+    if (notificationAction) {
+      session.notificationAction = undefined;
+      const stillRinging = call.status === 'ringing' && call.role === 'CALLEE';
+      const expired = !!call.expiresAt && Date.parse(call.expiresAt) <= Date.now();
+      if (stillRinging && !expired && !session.notificationResponseSent) {
+        session.notificationResponseSent = true;
+        if (notificationAction === 'reject') {
+          lifecycle.end(true);
+        } else {
+          store.publish(session, { notice: 'Atendiendo llamada…' });
+          lifecycle.accept();
+        }
+      } else {
+        if (stillRinging && expired) {
+          lifecycle.finish(session, 'missed', 'La llamada ya expiró.');
+          return;
+        }
+        store.publish(session, {
+          answering: false,
+          notice: 'Esta llamada ya no está disponible para atender.',
+        });
+      }
     }
     if (data.negotiation && call.isSelectedConnection) {
       if (session.negotiation?.negotiationId !== data.negotiation.negotiationId) {
         negotiation.setNegotiation(session, data.negotiation);
-      }
-      else {
+      } else {
         session.negotiation.status = data.negotiation.status;
       }
       if (data.negotiation.status === 'COMPLETED') {
@@ -118,5 +200,13 @@ export function createCallEventHandlers(store: CallStore, lifecycle: CallLifecyc
       }
     }
   }
-  return { handleCreated, handleIncoming, handleAccept, handleReject, handleEnd, handleConnected, handleState };
+  return {
+    handleCreated,
+    handleIncoming,
+    handleAccept,
+    handleReject,
+    handleEnd,
+    handleConnected,
+    handleState,
+  };
 }

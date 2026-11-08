@@ -8,6 +8,7 @@ export interface CallView {
   participantId: string;
   media: CallMedia;
   incoming: boolean;
+  answering?: boolean;
   status: CallStatus | 'requesting';
   selected: boolean;
   expiresAt?: string | null;
@@ -23,6 +24,9 @@ export interface CallView {
 export interface CallSession {
   view: CallView;
   requestId?: string;
+  notificationAction?: 'accept' | 'reject';
+  notificationResponseSent?: boolean;
+  notificationResponseDeadline?: number;
   cancelled: boolean;
   closed: boolean;
   negotiation?: Negotiation;
