@@ -20,6 +20,14 @@ self.addEventListener('push', (event) => {
   const payload = event.data.json();
   const { title, body, icon, data } = payload;
 
+  console.log('AAAA', data);
+  if (data?.type === 'call-incoming' || data?.type === 'call-missed') {
+    console.log('BBBB');
+
+    event.waitUntil(showCallPushNotification({ title, body, icon, data }));
+    return;
+  }
+
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
@@ -48,6 +56,11 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const { type, conversationId } = event.notification.data ?? {};
+
+  if (type === 'call-incoming' || type === 'call-missed') {
+    event.waitUntil(openOrFocusCallWindow());
+    return;
+  }
 
   if (type === 'request-connection') {
     event.waitUntil(
@@ -103,4 +116,45 @@ async function openOrFocusWindow(url: string) {
   }
 
   await self.clients.openWindow(url);
+}
+
+// Focusing the current chat preserves its selected WebSocket and active peer.
+async function openOrFocusCallWindow() {
+  const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+  const chatClient = windowClients.find((client) => new URL(client.url).pathname === '/chat');
+  if (chatClient) {
+    await chatClient.focus();
+    return;
+  }
+  await self.clients.openWindow('/chat');
+}
+
+interface CallPushPayload {
+  title: string;
+  body: string;
+  icon?: string;
+  data: { type: 'call-incoming' | 'call-missed'; callId: string; expiresAt?: string | null };
+}
+
+async function showCallPushNotification({ title, body, icon, data }: CallPushPayload) {
+  const incoming = data.type === 'call-incoming';
+  //if (incoming && data.expiresAt && Date.parse(data.expiresAt) <= Date.now()) return;
+
+  if (!incoming) {
+    // A missed call replaces its ringing notice, including notices shown by an open tab.
+    const ringing = await self.registration
+      .getNotifications({
+        tag: `messinger:call-incoming:${data.callId}`,
+      })
+      .catch(() => []);
+    for (const notification of ringing) notification.close();
+  }
+
+  await self.registration.showNotification(title, {
+    body,
+    icon,
+    data,
+    tag: `messinger:${data.type}:${data.callId}`,
+    requireInteraction: incoming,
+  });
 }

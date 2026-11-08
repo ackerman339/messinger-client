@@ -37,7 +37,7 @@ export function useCallPanel() {
     failed: 'La llamada falló',
   };
 
-  const { soundBlocked, enableSound } = useIncomingCallSound(canAccept, call?.callId);
+  useIncomingCallSound(canAccept, call?.callId);
   let participantName = 'Contacto';
   for (const conversation of conversations.values()) {
     const member = conversation.members.find((member) => member.userId === call?.participantId);
@@ -65,8 +65,6 @@ export function useCallPanel() {
     participantName,
     initials,
     duration,
-    soundBlocked,
-    enableSound,
     terminal,
     canAccept,
     canEnd: !!call && !terminal && !canAccept,

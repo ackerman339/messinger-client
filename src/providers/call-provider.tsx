@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createCallClient } from '@clients/call-client';
+import { createCallNotifications } from '@services/call-notifications';
 import { CallContext } from '@context/call-context';
 
 import type { ReactNode } from 'react';
@@ -11,13 +12,24 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [call, setCall] = useState<CallView | null>(null);
 
   useEffect(() => {
+    const notifications = createCallNotifications();
+    function refreshNotifications() {
+      notifications.update(client.getSnapshot());
+    }
+
     const unsubscribe = client.subscribe(() => {
-      setCall(client.getSnapshot());
+      const snapshot = client.getSnapshot();
+      setCall(snapshot);
+      notifications.update(snapshot);
     });
+
     const unmount = client.mount();
+    window.addEventListener('focus', refreshNotifications);
 
     return () => {
       unsubscribe();
+      notifications.dispose();
+      window.removeEventListener('focus', refreshNotifications);
       unmount();
     };
   }, [client]);

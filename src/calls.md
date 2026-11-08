@@ -60,6 +60,18 @@ El cliente WebSocket conserva su API original (`emit` y `on`). Las llamadas no o
 
 El panel usa una presentación oscura con avatar, nombre del participante disponible en las conversaciones y controles circulares. En móvil ocupa toda la pantalla; en escritorio aparece como un diálogo centrado con navegación de teclado y foco contenido. El video remoto ocupa el fondo y el local aparece como miniatura.
 
-`hooks/use-incoming-call-sound.ts` reproduce el tono únicamente mientras la llamada sea entrante y esté en `ringing`. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, el panel permite activar el sonido mediante interacción.
+`hooks/use-incoming-call-sound.ts` reproduce el tono únicamente mientras la llamada sea entrante y esté en `ringing`. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, se reintenta al interactuar con la aplicación.
 
 `services/call-ringtone.ts` administra la reproducción en bucle y su limpieza. `public/sounds/incoming-call.wav` es un tono original generado para la aplicación; no utiliza el audio de WhatsApp ni requiere descargas externas.
+
+## Notificaciones de llamadas
+
+Los avisos de llamadas reutilizan el permiso de notificaciones y la suscripción push gestionados por UserProvider. No hay una activación independiente en el menú de llamadas.
+
+`services/call-notifications.ts` observa los snapshots en la suscripción de `CallProvider`. Muestra una notificación entrante por llamada y la cierra al dejar de sonar o expirar. Muestra una notificación perdida cuando el servidor indica `missed` o `NO_ANSWER`, incluso por sincronización. Rechazar, atender en otro dispositivo y realizar llamadas salientes no producen avisos de llamada perdida.
+
+Se utiliza `ServiceWorkerRegistration.showNotification` si existe un worker activo, y `Notification` como alternativa en escritorio/desarrollo. Al pulsar una notificación de llamada, el service worker enfoca un chat abierto sin navegar ni recargarlo. No hay acciones de aceptar automáticamente desde la notificación.
+
+Esta implementación es del cliente: necesita que la aplicación esté abierta y reciba los eventos WebSocket o la sincronización. Las notificaciones push de llamadas con la aplicación cerrada requieren integración del backend, que continúa pendiente. Denegar el permiso o no soportar la API no impide recibir llamadas en la interfaz.
+
+Las pushes de llamadas se envían a los dispositivos suscritos aunque exista un WebSocket del usuario en otra pestaña o dispositivo. El worker y el cliente utilizan la misma etiqueta por tipo de aviso y callId para reemplazar notificaciones repetidas. Las entrantes permanecen visibles; la push perdida cierra el aviso entrante de esa llamada. La suscripción sigue siendo administrada por UserProvider.

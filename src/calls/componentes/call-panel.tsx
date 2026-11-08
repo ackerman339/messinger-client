@@ -1,5 +1,5 @@
 import { Dialog } from 'radix-ui';
-import { Phone, Video, Volume2 } from 'lucide-react';
+import { Phone, Video } from 'lucide-react';
 import { useCallPanel } from '@hooks/use-call-panel';
 import { CallStream } from './call-stream';
 import { CallControls } from './call-controls';
@@ -14,8 +14,6 @@ export function CallPanel() {
     participantName,
     initials,
     duration,
-    soundBlocked,
-    enableSound,
   } = model;
   if (!call) return null;
 
@@ -85,11 +83,6 @@ export function CallPanel() {
               )}
 
               <footer className='call-footer'>
-                {soundBlocked && (
-                  <button type='button' className='call-sound-button' onClick={enableSound}>
-                    <Volume2 size={16} /> Activar sonido de llamada
-                  </button>
-                )}
                 {call.notice && <p className='call-notice'>{call.notice}</p>}
                 {call.error && (
                   <p role='alert' className='call-error'>

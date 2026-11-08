@@ -222,7 +222,6 @@
 .call-error {
   color: var(--color-danger);
 }
-.call-sound-button,
 .call-play-button {
   display: inline-flex;
   align-items: center;
@@ -235,11 +234,7 @@
   font-size: 12px;
   cursor: pointer;
 }
-.call-sound-button {
-  margin-bottom: 22px;
-}
 .call-control:focus-visible,
-.call-sound-button:focus-visible,
 .call-play-button:focus-visible,
 .call-header-button:focus-visible {
   outline: 3px solid var(--color-accent);
