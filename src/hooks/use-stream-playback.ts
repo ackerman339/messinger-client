@@ -1,6 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-export function useStreamPlayback(stream?: MediaStream) {
+export function useStreamPlayback(
+  stream?: MediaStream,
+  onElement?: (element: HTMLVideoElement | null) => void,
+) {
   const ref = useRef<HTMLVideoElement>(null);
   const [blocked, setBlocked] = useState(false);
 
@@ -25,5 +28,13 @@ export function useStreamPlayback(stream?: MediaStream) {
       .catch(() => setBlocked(true));
   };
 
-  return { ref, blocked, play };
+  const attach = useCallback(
+    (element: HTMLVideoElement | null) => {
+      ref.current = element;
+      onElement?.(element);
+    },
+    [onElement],
+  );
+
+  return { ref: attach, blocked, play };
 }

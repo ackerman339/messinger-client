@@ -65,6 +65,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
     client.toggle('video');
   }
 
+  function handleSwitchCamera() {
+    void client.switchCamera();
+  }
+
   return (
     <CallContext.Provider
       value={{
@@ -76,6 +80,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         handleDismissCall,
         handleToggleMicrophone,
         handleToggleCamera,
+        handleSwitchCamera,
       }}
     >
       {children}

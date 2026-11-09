@@ -16,4 +16,17 @@
   --color-online: #4fae4e; /* presence indicator */
 
   --font-sans: 'Inter', system-ui, sans-serif;
+  --color-accent-ink: color-mix(in srgb, var(--color-accent) 38%, var(--color-text-primary));
+  --animate-call-ring: call-ring 2.4s ease-out infinite;
+
+  @keyframes call-ring {
+    from {
+      transform: scale(1);
+      opacity: 0.9;
+    }
+    to {
+      transform: scale(1.35);
+      opacity: 0;
+    }
+  }
 }

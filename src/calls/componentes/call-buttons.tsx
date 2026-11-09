@@ -8,7 +8,7 @@ export function CallButtons({ participantId }: { participantId: string }) {
     <>
       <button
         type='button'
-        className='call-header-button'
+        className='grid size-[42px] cursor-pointer place-items-center rounded-full text-accent transition-colors duration-200 enabled:hover:bg-accent/12 focus-visible:outline-3 focus-visible:outline-offset-5 focus-visible:outline-accent disabled:cursor-default disabled:opacity-35'
         disabled={busy}
         aria-label='Llamar'
         title='Llamar'
@@ -18,7 +18,7 @@ export function CallButtons({ participantId }: { participantId: string }) {
       </button>
       <button
         type='button'
-        className='call-header-button'
+        className='grid size-[42px] cursor-pointer place-items-center rounded-full text-accent transition-colors duration-200 enabled:hover:bg-accent/12 focus-visible:outline-3 focus-visible:outline-offset-5 focus-visible:outline-accent disabled:cursor-default disabled:opacity-35'
         disabled={busy}
         aria-label='Videollamada'
         title='Videollamada'

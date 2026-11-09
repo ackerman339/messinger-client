@@ -60,9 +60,9 @@ El cliente WebSocket conserva su API original (`emit` y `on`). Las llamadas no o
 
 El panel usa una presentación oscura con avatar, nombre del participante disponible en las conversaciones y controles circulares. En móvil ocupa toda la pantalla; en escritorio aparece como un diálogo centrado con navegación de teclado y foco contenido. El video remoto ocupa el fondo y el local aparece como miniatura.
 
-`hooks/use-incoming-call-sound.ts` reproduce el tono únicamente mientras la llamada sea entrante y esté en `ringing`. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, se reintenta al interactuar con la aplicación.
+`hooks/use-call-sound.ts` reproduce el tono entrante en `ringing` y el repique saliente mientras se inicia o timbra una llamada de voz o video. `getCallSound` determina cuál corresponde; aceptar, rechazar, cancelar o finalizar detiene el repique. Al cambiar el estado, cambiar de llamada o desmontarse, detiene el audio. Si el navegador bloquea autoplay, se reintenta al interactuar con la aplicación.
 
-`services/call-ringtone.ts` administra la reproducción en bucle y su limpieza. `public/sounds/incoming-call.wav` es un tono original generado para la aplicación; no utiliza el audio de WhatsApp ni requiere descargas externas.
+`services/call-ringtone.ts` administra la reproducción en bucle y su limpieza. `public/sounds/incoming-call.wav` y `public/sounds/outgoing-call.wav` son tonos originales generados para la aplicación; no utilizan el audio de WhatsApp ni requiere descargas externas.
 
 ## Notificaciones de llamadas
 
@@ -81,3 +81,28 @@ El service worker entrega la acción elegida (Aceptar también al pulsar el cuer
 `answerFromNotification` y `rejectFromNotification` guardan la intención y solicitan CALL_SYNC. El snapshot del servidor determina participante, rol, medio y estado. Solo se envía CALL_ACCEPT o CALL_REJECT cuando la llamada sigue timbrando para el receptor y no ha expirado. No se toma una llamada atendida en otra conexión ni se reemplaza una llamada local distinta. Las respuestas repetidas no duplican el envío. No se cambian la autenticación ni la API del cliente WebSocket.
 
 Mientras se consulta/responde no se muestra otro aviso entrante. Una consulta sin respuesta cancela la intención a los 15 segundos. Los permisos de micrófono/cámara siguen siendo gestionados por el navegador. Con la app cerrada, Rechazar necesita abrirla para autenticar y enviar la respuesta mediante el WebSocket existente.
+
+
+## Dispositivos durante la llamada
+
+`CallAudioOutput` muestra un único botón **Altavoz/Auricular**, únicamente cuando el navegador permite `setSinkId` y expone dos salidas identificables y distintas: altavoz y auricular interno. El componente visual está en `calls/componentes/call-audio-output.tsx`; `use-call-audio-output.ts` suscribe el servicio `call-audio-output.ts`, que contiene la detección y el cambio de ruta. Sin ambas salidas no se muestra el botón ni un selector de dispositivos.
+
+La detección se ejecuta al iniciar el flujo, después de adquirir medios (para que los nombres estén disponibles) y en `devicechange`. El servicio reconoce nombres explícitos de altavoz/auricular interno en inglés y español; las etiquetas no están estandarizadas. Dos dispositivos cualesquiera, nombres vacíos/desconocidos, alias predeterminados, audífonos, Bluetooth y USB no se consideran el par de salidas internas. Una identificación ambigua deja el botón oculto. Solo se usan IDs devueltos por el navegador, nunca IDs inventados ni cambios de volumen.
+
+Cuando se identifica el altavoz se utiliza como salida inicial. Si el navegador no permite seleccionar salidas o no identifica ninguna, se conserva la salida que administra el navegador. El botón aparece después de aplicar correctamente la ruta inicial del par. Cada clic aplica el otro ID al elemento remoto y actualiza el icono solo al resolverse `setSinkId`; un fallo conserva el estado anterior y muestra un error. Un cambio de dispositivos durante la operación se procesa después, sin rutas simultáneas. Si el auricular deja de estar expuesto, se oculta el botón y se vuelve al altavoz disponible o a la salida del sistema. Se conserva la ruta si cambia el elemento de reproducción y se limpian los listeners al finalizar. No se modifica el micrófono ni la comunicación con el backend.
+
+El botón **Cambiar cámara** pasa por contexto, provider y cliente hasta `call-lifecycle.ts`, que evita cambios simultáneos y publica el estado de espera. `rtc/camera-switcher.ts` abre la cámara opuesta (frontal/trasera) o la siguiente webcam en computador, y reemplaza solo el track de video con `RTCRtpSender.replaceTrack`. Conserva el micrófono y el estado apagado de la cámara, actualiza la vista previa y libera el track anterior. Si la cámara exige acceso exclusivo se libera primero la anterior; un fallo intenta restaurarla. Un resultado tardío después de colgar se libera sin volver a publicar medios. Los fallos de dispositivo se muestran sin finalizar la llamada.
+
+La fila de controles se adapta para mostrar audio, micrófono, encendido de cámara, cambio de cámara y finalizar sin desbordarse en pantallas pequeñas. No se cambia el protocolo WebSocket ni la negociación con el backend.
+
+
+### Auricular interno del móvil
+
+La alternancia es una mejora progresiva de la web/PWA: funciona donde el navegador expone ambas salidas con nombres reconocibles y permite usarlas. No depende del modelo o del nombre del navegador. `AudioSession.type` no se utiliza como sustituto de la selección de salida. Los dispositivos con etiquetas no reconocidas mantienen la salida existente; para ampliar el reconocimiento se deben verificar los nombres reales que devuelve ese navegador.
+
+La miniatura local de cámara apagada muestra únicamente el icono `VideoOff`, con nombre accesible para lectores de pantalla y sin texto visible.
+
+
+## Estilos visuales
+
+Los componentes de llamadas usan utilidades Tailwind directamente. `CallControl` comparte la presentación de los botones y sus variantes aceptar/finalizar; no contiene lógica de llamadas. Las variantes de datos `video`, `media` y `ringing` controlan la presentación del panel, los tamaños de controles y la animación. Se conservan los colores del tema, los límites de altura, el diseño de pantalla completa en móvil, las áreas seguras, el foco de teclado y la preferencia de movimiento reducido. No hay hoja CSS de llamadas ni selectores de clase propios. El tono visual de contraste y los keyframes de `animate-call-ring` se configuran como tokens del tema Tailwind global.

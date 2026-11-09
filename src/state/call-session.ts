@@ -9,6 +9,7 @@ export interface CallView {
   media: CallMedia;
   incoming: boolean;
   answering?: boolean;
+  ending?: boolean;
   status: CallStatus | 'requesting';
   selected: boolean;
   expiresAt?: string | null;
@@ -17,6 +18,8 @@ export interface CallView {
   remote?: MediaStream;
   muted: boolean;
   cameraOff: boolean;
+  switchingCamera?: boolean;
+  deviceError?: string;
   error?: string;
   notice?: string;
 }
