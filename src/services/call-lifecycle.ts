@@ -1,3 +1,4 @@
+import { getCameraSwitchError } from '../rtc/camera-switcher';
 import { createCallSession } from '../state/call-session';
 import type { CallMedia, CallStatus } from '../types/call';
 import type { CallStore } from '../state/call-store';
@@ -89,7 +90,7 @@ export function createCallLifecycle(store: CallStore) {
       wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', { callId: session.view.callId });
       finish(session, reject ? 'rejected' : 'ended');
     } else {
-      store.publish(session, { notice: 'Cancelando llamada…' });
+      store.publish(session, { ending: true, notice: 'Cancelando llamada…' });
       sync(session);
     }
   }
@@ -104,6 +105,30 @@ export function createCallLifecycle(store: CallStore) {
       return;
     }
     store.publish(session, kind === 'audio' ? { muted: !enabled } : { cameraOff: !enabled });
+  }
+
+  async function switchCamera() {
+    const session = store.getSession();
+    if (
+      !session ||
+      !store.live(session) ||
+      !session.view.selected ||
+      session.view.media !== 'video' ||
+      !session.view.local ||
+      session.view.switchingCamera
+    )
+      return;
+    store.publish(session, { switchingCamera: true, deviceError: undefined });
+    try {
+      await session.rtc.switchCamera();
+    } catch (error) {
+      if (store.live(session))
+        store.publish(session, {
+          deviceError: getCameraSwitchError(error),
+        });
+    } finally {
+      if (store.live(session)) store.publish(session, { switchingCamera: false });
+    }
   }
 
   function sync(session: Session) {
@@ -198,6 +223,8 @@ export function createCallLifecycle(store: CallStore) {
       remote: undefined,
       selected: false,
       answering: false,
+      switchingCamera: false,
+      deviceError: undefined,
     });
   }
 
@@ -220,6 +247,7 @@ export function createCallLifecycle(store: CallStore) {
     rejectFromNotification,
     end,
     toggle,
+    switchCamera,
     sync,
     tick,
     cleanup,

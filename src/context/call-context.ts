@@ -12,6 +12,7 @@ interface CallContextValue {
   handleDismissCall: () => void;
   handleToggleMicrophone: () => void;
   handleToggleCamera: () => void;
+  handleSwitchCamera: () => void;
 }
 
 export const CallContext = createContext<CallContextValue | undefined>(undefined);

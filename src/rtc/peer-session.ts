@@ -1,3 +1,4 @@
+import { replaceCamera } from './camera-switcher';
 import { getIceServers } from '../services/ice-api';
 import type { CallMedia } from '../types/call';
 interface PeerCallbacks {
@@ -18,6 +19,7 @@ export function createPeerSession() {
   let local: MediaStream | undefined;
   let remote: MediaStream | undefined;
   let preparing: Promise<RTCPeerConnection> | undefined;
+  let switchCamera: (() => Promise<void>) | undefined;
 
   function prepare(media: CallMedia, callbacks: PeerCallbacks): Promise<RTCPeerConnection> {
     if (peer) {
@@ -40,7 +42,7 @@ export function createPeerSession() {
     }
     const localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
-      video: media === 'video',
+      video: media === 'video' ? { facingMode: { ideal: 'user' } } : false,
     });
     if (!callbacks.isActive()) {
       stopTracks(localStream);
@@ -81,6 +83,14 @@ export function createPeerSession() {
         }
       };
     });
+    switchCamera = () =>
+      replaceCamera({
+        peer: connection,
+        stream: localStream,
+        isActive: () => callbacks.isActive() && peer === connection && local === localStream,
+        onChange: () => callbacks.onStreams(new MediaStream(localStream.getTracks()), remoteStream),
+        onUnavailable: () => callbacks.onDeviceEnded('video'),
+      });
     callbacks.onStreams(localStream, remoteStream);
     return connection;
   }
@@ -100,6 +110,7 @@ export function createPeerSession() {
   }
 
   function close() {
+    switchCamera = undefined;
     if (peer) {
       peer.ontrack = null;
       peer.onicecandidate = null;
@@ -115,6 +126,9 @@ export function createPeerSession() {
   return {
     prepare,
     toggle,
+    switchCamera: async () => {
+      await switchCamera?.();
+    },
     close,
     get peer() {
       return peer;

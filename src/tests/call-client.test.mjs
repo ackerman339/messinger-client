@@ -53,10 +53,12 @@ const accept = { callId: 'call', status: 'accepted', isSelectedConnection: true,
 const offer = { callId: 'call', negotiationId: 'n1', negotiationType: 'INITIAL', sdp: 'v=0\r\na=ice-ufrag:abc\r\n' };
 let peers;
 let media;
-function mockMedia() {
+function mockMedia(video = false) {
   peers = [];
   class Stream {
-    tracks = [];
+    constructor(tracks = []) { this.tracks = [...tracks]; }
+    getVideoTracks() { return this.tracks.filter(track => track.kind === 'video'); }
+    removeTrack(track) { this.tracks = this.tracks.filter(item => item !== track); }
     getTracks() { return this.tracks; }
     addTrack(track) { this.tracks.push(track); }
   }
@@ -64,7 +66,9 @@ function mockMedia() {
   globalThis.RTCPeerConnection = class {
     connectionState = 'new'; remoteDescription = null; localDescription = null; added = []; applied = 0; answers = 0;
     constructor() { peers.push(this); }
-    addTrack() {}
+    senders = [];
+    addTrack(track) { this.senders.push({ track, async replaceTrack(next) { this.track = next; } }); }
+    getSenders() { return this.senders; }
     async setRemoteDescription(value) { this.applied++; this.remoteDescription = value; }
     async setLocalDescription(value) { this.localDescription = value; }
     async createAnswer() { this.answers++; return { type: 'answer', sdp: 'answer' }; }
@@ -72,17 +76,18 @@ function mockMedia() {
     close() { this.closed = true; }
   };
   const stream = new Stream(); stream.addTrack({ kind: 'audio', enabled: true, readyState: 'live', stop() { this.stopped = true; } });
+  if (video) stream.addTrack({ kind: 'video', enabled: true, readyState: 'live', getSettings: () => ({ deviceId: 'front' }), stop() { this.stopped = true; this.readyState = 'ended'; } });
   media = stream;
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { mediaDevices: { getUserMedia: async () => stream } } });
 }
-async function selectedOffer(t) {
-  mockMedia(); const client = setup(t);
-  events.get('CALL_INCOMING')(incoming); events.get('CALL_ACCEPT')(accept);
+async function selectedOffer(t, mediaType = 'audio') {
+  mockMedia(mediaType === 'video'); const client = setup(t);
+  events.get('CALL_INCOMING')({ ...incoming, media: mediaType }); events.get('CALL_ACCEPT')(accept);
   const signal = { ...offer, signalId: await sdpHash(offer.sdp) };
   events.get('CALL_OFFER')(signal);
   const sync = sent.findLast(item => item.type === 'CALL_SYNC');
   events.get('CALL_STATE')({ syncId: sync.data.syncId,
-    call: { ...incoming, status: 'accepted', isSelectedConnection: true, isTerminal: false, currentNegotiationId: 'n1' },
+    call: { ...incoming, media: mediaType, status: 'accepted', isSelectedConnection: true, isTerminal: false, currentNegotiationId: 'n1' },
     negotiation: { negotiationId: 'n1', status: 'OFFERED', type: 'INITIAL', expiresAt: null } });
   await flush(); return { client, signal };
 }
@@ -208,7 +213,7 @@ test('events from a retired negotiation cannot modify the current peer', async t
   assert.equal(peers[0].applied, applied);
 });
 
-const { createCallRingtone } = await import(loadModuleUrl(new URL('../services/call-ringtone.ts', import.meta.url)));
+const { createCallRingtone, getCallSound } = await import(loadModuleUrl(new URL('../services/call-ringtone.ts', import.meta.url)));
 function mockRingtone(t, play) {
   const previous = globalThis.Audio;
   const audio = { currentTime: 9, pauses: 0, play, pause() { this.pauses++; } };
@@ -533,4 +538,71 @@ test('notification rejection cannot replace an unrelated active call', t => {
   client.start('other', 'audio');
   client.rejectFromNotification(answerCallId);
   assert.deepEqual(sent.map(item => item.type), ['CALL_INIT']);
+});
+
+for (const media of ['audio', 'video']) {
+  test(`outgoing ${media} calls ring until accepted and stop after cancellation or terminal states`, t => {
+    const view = { media, incoming: false, status: 'requesting' };
+    assert.equal(getCallSound(view), 'outgoing');
+    assert.equal(getCallSound({ ...view, status: 'ringing' }), 'outgoing');
+    for (const status of ['accepted', 'connected', 'rejected', 'missed', 'ended', 'failed']) {
+      assert.equal(getCallSound({ ...view, status }), undefined);
+    }
+    assert.equal(getCallSound({ ...view, ending: true }), undefined);
+    const audio = mockRingtone(t, async () => {});
+    const ringtone = createCallRingtone('outgoing');
+    assert.equal(audio.url, '/sounds/outgoing-call.wav');
+    assert.equal(audio.loop, true);
+    ringtone.stop();
+    assert.equal(audio.currentTime, 0);
+    assert.equal(audio.pauses, 1);
+  });
+}
+test('incoming and outgoing tones cannot overlap during a notification answer', () => {
+  assert.equal(getCallSound(null), undefined);
+  assert.equal(getCallSound({ incoming: true, status: 'ringing' }), 'incoming');
+  assert.equal(getCallSound({ incoming: true, status: 'requesting' }), undefined);
+  assert.equal(getCallSound({ incoming: true, status: 'ringing', answering: true }), undefined);
+});
+
+test('camera action updates the actual video sender and preview without new signaling', async t => {
+  const { client } = await selectedOffer(t, 'video');
+  const previous = media.getVideoTracks()[0];
+  const microphone = media.getTracks().find(track => track.kind === 'audio');
+  let resolve;
+  let captures = 0;
+  navigator.mediaDevices.enumerateDevices = async () => ['front', 'back'].map(deviceId => ({ kind: 'videoinput', deviceId }));
+  navigator.mediaDevices.getUserMedia = () => { captures++; return new Promise(done => { resolve = done; }); };
+  const before = sent.length;
+  client.toggle('video');
+  const switching = client.switchCamera();
+  await flush();
+  assert.equal(client.getSnapshot().switchingCamera, true);
+  await client.switchCamera();
+  assert.equal(captures, 1);
+  const replacement = { kind: 'video', enabled: true, readyState: 'live', stop() { this.stopped = true; } };
+  resolve(new MediaStream([replacement]));
+  await switching;
+  assert.equal(client.getSnapshot().switchingCamera, false);
+  assert.equal(client.getSnapshot().local.getVideoTracks()[0], replacement);
+  assert.ok(previous.stopped);
+  assert.equal(replacement.enabled, false);
+  assert.equal(client.getSnapshot().cameraOff, true);
+  assert.equal(peers[0].getSenders().find(sender => sender.track.kind === 'video').track, replacement);
+  assert.equal(client.getSnapshot().local.getTracks().find(track => track.kind === 'audio'), microphone);
+  assert.ok(!microphone.stopped);
+  assert.equal(sent.length, before);
+});
+
+test('a camera permission failure is displayed without ending or renegotiating the call', async t => {
+  const { client } = await selectedOffer(t, 'video');
+  navigator.mediaDevices.enumerateDevices = async () => ['front', 'back'].map(deviceId => ({ kind: 'videoinput', deviceId }));
+  navigator.mediaDevices.getUserMedia = async () => { throw new DOMException('Denied', 'NotAllowedError'); };
+  const before = sent.length;
+  await client.switchCamera();
+  assert.equal(client.getSnapshot().status, 'accepted');
+  assert.equal(client.getSnapshot().switchingCamera, false);
+  assert.match(client.getSnapshot().deviceError, /Permite el acceso/);
+  assert.equal(sent.length, before);
+  assert.equal(media.getVideoTracks()[0].readyState, 'live');
 });

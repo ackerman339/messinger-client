@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useCallContext } from '@context/call-context';
 import { useChatContext } from '@context/chat-context';
-import { useIncomingCallSound } from './use-incoming-call-sound';
+import { useCallSound } from './use-call-sound';
+import { useCallAudioOutput } from './use-call-audio-output';
+import { getCallSound } from '@services/call-ringtone';
 import { isTerminal } from '../types/call';
 
 export function useCallPanel() {
@@ -13,6 +15,7 @@ export function useCallPanel() {
     handleDismissCall,
     handleToggleMicrophone,
     handleToggleCamera,
+    handleSwitchCamera,
   } = useCallContext();
   const { conversations } = useChatContext();
   const [now, setNow] = useState(() => Date.now());
@@ -41,7 +44,8 @@ export function useCallPanel() {
     failed: 'La llamada falló',
   };
 
-  useIncomingCallSound(canAccept, call?.callId);
+  useCallSound(getCallSound(call), call?.incoming ? call.callId : call?.participantId);
+  const audioOutput = useCallAudioOutput(!!call && !terminal, call?.local);
   let participantName = 'Contacto';
   for (const conversation of conversations.values()) {
     const member = conversation.members.find((member) => member.userId === call?.participantId);
@@ -66,6 +70,7 @@ export function useCallPanel() {
 
   return {
     call,
+    audioOutput,
     participantName,
     initials,
     duration,
@@ -86,6 +91,7 @@ export function useCallPanel() {
     dismiss: handleDismissCall,
     toggleMicrophone: handleToggleMicrophone,
     toggleCamera: handleToggleCamera,
+    switchCamera: handleSwitchCamera,
   };
 }
 

@@ -23,6 +23,7 @@ export function createCallClient() {
     rejectFromNotification: lifecycle.rejectFromNotification,
     end: lifecycle.end,
     toggle: lifecycle.toggle,
+    switchCamera: lifecycle.switchCamera,
     dismiss: store.dismiss,
   };
 }
