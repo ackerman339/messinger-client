@@ -78,7 +78,7 @@ export function ConversationList() {
           </label>
         </div>
       </header>
-
+      <span className='text-danger'>PWA version 1.0.0</span>
       <div className='h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-y-auto p-2'>
         {loadingConversations && <ListState label='Cargando conversaciones...' />}
         {!loadingConversations && conversations.size === 0 ? (
