@@ -1,20 +1,64 @@
-import { CallButtons } from '@/calls/componentes/call-buttons';
+import { useLayoutEffect, useState } from 'react';
 import { Avatar, DropdownMenu } from 'radix-ui';
 import { ArrowLeft, EllipsisVertical, MicSignal, BrushCleaning } from 'lucide-react';
+import { CallButtons } from '@/calls/componentes/call-buttons';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { formatLastSeen } from '@lib/utils';
 import { conversationService } from '@services/conversation';
+import { WS_SERVER_EVENTS } from '@/types/websocket';
+import { wsClient } from '@clients/websocket-client';
 
 export function ChatHeader() {
   const { user } = useUserContext();
   const { activeConversation, unSetCurrentConversation } = useChatContext();
+  const [presence, setPresence] = useState<{ online: boolean; lastSeenAt: Date | null }>({
+    online: false,
+    lastSeenAt: null,
+  });
+
+  useLayoutEffect(() => {
+    if (!activeConversation) {
+      return;
+    }
+
+    if (activeConversation.type !== 'PRIVATE') {
+      return;
+    }
+
+    const unsubscribeUserPresenceOnline = wsClient.on(
+      WS_SERVER_EVENTS.PRESENCE_ONLINE,
+      async (message) => {
+        setPresence(message);
+      },
+    );
+
+    const unsubscribeUserPresenceOffline = wsClient.on(
+      WS_SERVER_EVENTS.PRESENCE_OFFLINE,
+      async (message) => {
+        setPresence(message);
+      },
+    );
+
+    const privateConversationMember = activeConversation.members.filter(
+      (member) => member.userId !== user?.id,
+    )[0];
+
+    wsClient.emit('PRESENCE_ONLINE', {
+      receiverId: privateConversationMember.userId,
+    });
+
+    return () => {
+      unsubscribeUserPresenceOnline();
+      unsubscribeUserPresenceOffline();
+    };
+  }, [activeConversation, user]);
 
   if (!activeConversation) {
     return null;
   }
 
-  const privateConversationMember = activeConversation?.members.filter(
+  const privateConversationMember = activeConversation.members.filter(
     (member) => member.userId !== user?.id,
   )[0];
 
@@ -41,12 +85,19 @@ export function ChatHeader() {
         </Avatar.Root>
         <div className='min-w-0'>
           <h1 className='truncate text-base font-semibold'>{title}</h1>
-          {activeConversation.type === 'PRIVATE' && privateConversationMember?.lastSeenAt && (
-            <p className='truncate text-xs text-text-secondary'>
-              <span>Ultima vez: </span>
-              {formatLastSeen(privateConversationMember.lastSeenAt)}
-            </p>
-          )}
+          {activeConversation.type === 'PRIVATE' &&
+            (presence.online ? (
+              <p className='truncate text-xs text-text-secondary'>
+                <span>En línea</span>
+              </p>
+            ) : (
+              presence.lastSeenAt && (
+                <p className='truncate text-xs text-text-secondary'>
+                  <span>Ultima vez: </span>
+                  {formatLastSeen(presence.lastSeenAt)}
+                </p>
+              )
+            ))}
         </div>
       </div>
 

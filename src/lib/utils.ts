@@ -18,16 +18,16 @@ export function formatLastSeen(date: string | Date) {
   }
 
   if (days === 1) {
-    return `ayer a las ${format(lastSeen, 'HH:mm')}`;
+    return `ayer a las ${format(lastSeen, 'hh:mm a')}`;
   }
 
   if (days < 7) {
-    return format(lastSeen, "EEEE 'a las' HH:mm", {
+    return format(lastSeen, "EEEE 'a las' hh:mm a", {
       locale: es,
     });
   }
 
-  return format(lastSeen, "d 'de' MMMM 'a las' HH:mm", {
+  return format(lastSeen, "d 'de' MMMM 'a las' hh:mm a", {
     locale: es,
   });
 }
