@@ -94,9 +94,6 @@ export function ConversationList() {
         )}
         <div ref={sentinelRef}></div>
       </div>
-      <p className='absolute bottom-0 left-2 text-xs'>
-        <span className='text-danger'>PWA version 1.0.0</span>
-      </p>
     </aside>
   );
 }
