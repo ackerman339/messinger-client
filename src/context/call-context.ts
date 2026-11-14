@@ -5,7 +5,11 @@ import type { CallView } from '@/state/call-session';
 
 interface CallContextValue {
   call: CallView | null;
-  handleStartCall: (participantId: string, media: CallMedia) => void;
+  handleStartCall: (
+    participantId: string,
+    media: CallMedia,
+    conversationId?: string,
+  ) => void;
   handleAcceptCall: () => void;
   handleRejectCall: () => void;
   handleEndCall: () => void;
@@ -15,10 +19,13 @@ interface CallContextValue {
   handleSwitchCamera: () => void;
 }
 
-export const CallContext = createContext<CallContextValue | undefined>(undefined);
+export const CallContext = createContext<CallContextValue | undefined>(
+  undefined,
+);
 
 export function useCallContext() {
   const ctx = useContext(CallContext);
-  if (!ctx) throw new Error('useCallContext must be used within a <CallProvider>');
+  if (!ctx)
+    throw new Error('useCallContext must be used within a <CallProvider>');
   return ctx;
 }

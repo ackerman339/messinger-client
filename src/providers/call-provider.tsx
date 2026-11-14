@@ -15,7 +15,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const [call, setCall] = useState<CallView | null>(null);
 
   useEffect(() => {
-    const notifications = createCallNotifications(client.answerFromNotification);
+    const notifications = createCallNotifications(
+      client.answerFromNotification,
+    );
     function refreshNotifications() {
       notifications.update(client.getSnapshot());
     }
@@ -39,8 +41,12 @@ export function CallProvider({ children }: { children: ReactNode }) {
 
   useNotificationCallAction(client);
 
-  function handleStartCall(participantId: string, media: CallMedia) {
-    client.start(participantId, media, user?.username);
+  function handleStartCall(
+    participantId: string,
+    media: CallMedia,
+    conversationId?: string,
+  ) {
+    client.start(participantId, media, user?.username, conversationId);
   }
 
   function handleAcceptCall() {

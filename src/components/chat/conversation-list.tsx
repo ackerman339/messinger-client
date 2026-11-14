@@ -8,7 +8,11 @@ import { conversationService } from '@/services/conversation';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { wsClient } from '@clients/websocket-client';
 
-import type { Conversation } from '@/types/conversation';
+import type {
+  Conversation,
+  Message,
+  CallConversationEvent,
+} from '@/types/conversation';
 
 export function ConversationList() {
   const {
@@ -79,7 +83,9 @@ export function ConversationList() {
         </div>
       </header>
       <div className='h-[calc(100vh-64px)] max-h-[calc(100vh-64px)] overflow-y-auto p-2'>
-        {loadingConversations && <ListState label='Cargando conversaciones...' />}
+        {loadingConversations && (
+          <ListState label='Cargando conversaciones...' />
+        )}
         {!loadingConversations && conversations.size === 0 ? (
           <ListState label='No tienes conversaciones aún' />
         ) : (
@@ -98,13 +104,28 @@ export function ConversationList() {
   );
 }
 
+function getLastMessageContent(
+  message?: Pick<Message, 'type' | 'metadata'> & { content?: string },
+) {
+  if (message?.type === 'CALL_ACCEPTED' || message?.type === 'CALL_END') {
+    return message.metadata?.media === 'video'
+      ? 'Videollamada'
+      : 'Llamada de voz';
+  }
+  return message?.content ?? '';
+}
+
 type ConversationRowProps = {
   conversation: Conversation;
   isActive: boolean;
   onSelect: () => void;
 };
 
-function ConversationRow({ conversation, isActive, onSelect }: ConversationRowProps) {
+function ConversationRow({
+  conversation,
+  isActive,
+  onSelect,
+}: ConversationRowProps) {
   const { user } = useUserContext();
   const { activeConversation } = useChatContext();
 
@@ -125,37 +146,62 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
     privateConversationUser.unreadCount,
   );
 
-  const [lastMessageContent, setLastMessageContent] = useState(conversation.lastMessage?.content);
+  const [lastMessageContent, setLastMessageContent] = useState(
+    getLastMessageContent(conversation.lastMessage),
+  );
 
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, async (message) => {
-      if (activeConversation) {
-        if (message.conversation.id === conversation.id) {
-          if (activeConversation.id !== conversation.id) {
-            setUnreadMessagesCount((prev) => prev + 1);
+    const unsubscribeNewMessage = wsClient.on(
+      WS_SERVER_EVENTS.NEW_MESSAGE,
+      async (message) => {
+        if (activeConversation) {
+          if (message.conversation.id === conversation.id) {
+            if (activeConversation.id !== conversation.id) {
+              setUnreadMessagesCount((prev) => prev + 1);
+            }
+            setLastMessageContent(getLastMessageContent(message));
+            await conversationService.resetUnreadMessagesCount({
+              conversationId: activeConversation.id,
+            });
           }
-          setLastMessageContent(message.content);
-          await conversationService.resetUnreadMessagesCount({
-            conversationId: activeConversation.id,
-          });
+        } else {
+          if (message.conversation.id === conversation.id) {
+            setUnreadMessagesCount((prev) => prev + 1);
+            setLastMessageContent(getLastMessageContent(message));
+          }
         }
-      } else {
-        if (message.conversation.id === conversation.id) {
-          setUnreadMessagesCount((prev) => prev + 1);
-          setLastMessageContent(message.content);
-        }
-      }
-    });
+      },
+    );
 
-    const unsubscribeMessageSent = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
-      if (message.conversation.id === conversation.id) {
-        setLastMessageContent(message.content);
-      }
-    });
+    const unsubscribeMessageSent = wsClient.on(
+      WS_SERVER_EVENTS.MESSAGE_SENT,
+      (message) => {
+        if (message.conversation.id === conversation.id) {
+          setLastMessageContent(getLastMessageContent(message));
+        }
+      },
+    );
+
+    function handleCallEvent({
+      conversationEvent,
+    }: {
+      conversationEvent?: CallConversationEvent;
+    }) {
+      if (
+        !conversationEvent ||
+        conversationEvent.conversationId !== conversation.id
+      )
+        return;
+      setLastMessageContent(getLastMessageContent(conversationEvent));
+    }
+    const unsubscribeCallEnd = wsClient.on('CALL_END', handleCallEvent);
+    const unsubscribeCallReject = wsClient.on('CALL_REJECT', handleCallEvent);
 
     return () => {
       unsubscribeNewMessage();
       unsubscribeMessageSent();
+      unsubscribeCallEnd();
+      unsubscribeCallReject();
     };
   }, [activeConversation, conversation.id]);
 
@@ -177,8 +223,14 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
       onClick={onSelect}
     >
       <Avatar.Root className='relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
-        <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
-        <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
+        <Avatar.Image
+          className='size-full object-cover'
+          src={undefined}
+          alt=''
+        />
+        <Avatar.Fallback>
+          {title ? title.slice(0, 2).toUpperCase() : ''}
+        </Avatar.Fallback>
       </Avatar.Root>
 
       <span className='min-w-0'>
@@ -201,7 +253,9 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
 
       {unreadMessageCount > 0 && (
         <div className='grid place-content-center size-7 rounded-full bg-accent'>
-          <span className='text-[10px] text-white font-bold'>{unreadMessageCount}</span>
+          <span className='text-[10px] text-white font-bold'>
+            {unreadMessageCount}
+          </span>
         </div>
       )}
     </button>
@@ -209,5 +263,9 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
 }
 
 function ListState({ label }: { label: string }) {
-  return <div className='px-4 py-8 text-center text-sm text-text-secondary'>{label}</div>;
+  return (
+    <div className='px-4 py-8 text-center text-sm text-text-secondary'>
+      {label}
+    </div>
+  );
 }

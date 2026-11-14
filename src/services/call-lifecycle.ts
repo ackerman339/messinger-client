@@ -5,13 +5,19 @@ import type { CallStore } from '../state/call-store';
 import type { CallSession as Session } from '../state/call-session';
 import { wsClient } from '@/clients/websocket-client';
 export function createCallLifecycle(store: CallStore) {
-  function start(participantId: string, media: CallMedia, callerName?: string) {
+  function start(
+    participantId: string,
+    media: CallMedia,
+    callerName?: string,
+    conversationId?: string,
+  ) {
     const current = store.getSession();
     if (current && !current.closed) {
       return;
     }
     const session = createCallSession(
       {
+        conversationId,
         participantId,
         media,
         incoming: false,
@@ -26,6 +32,9 @@ export function createCallLifecycle(store: CallStore) {
     store.publish(session);
     const name = callerName?.trim().slice(0, 100);
     wsClient.emit('CALL_INIT', {
+      ...(session.view.conversationId
+        ? { conversationId: session.view.conversationId }
+        : {}),
       requestId: session.requestId!,
       calleeId: participantId,
       media,
@@ -33,14 +42,27 @@ export function createCallLifecycle(store: CallStore) {
     });
   }
 
-  function respondFromNotification(callId: string, action: 'accept' | 'reject') {
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callId)) return;
+  function respondFromNotification(
+    callId: string,
+    action: 'accept' | 'reject',
+  ) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        callId,
+      )
+    )
+      return;
     if (store.terminalIds.has(callId)) return;
     let session = store.getSession();
     if (session && !session.closed) {
       if (session.view.callId !== callId || !session.view.incoming) return;
-      if (session.view.status !== 'ringing' && session.view.status !== 'requesting') return;
-      if (session.notificationResponseSent || session.notificationAction) return;
+      if (
+        session.view.status !== 'ringing' &&
+        session.view.status !== 'requesting'
+      )
+        return;
+      if (session.notificationResponseSent || session.notificationAction)
+        return;
     } else {
       session = createCallSession({
         callId,
@@ -60,7 +82,8 @@ export function createCallLifecycle(store: CallStore) {
     session.notificationResponseDeadline = Date.now() + 15_000;
     store.publish(session, {
       answering: true,
-      notice: action === 'reject' ? 'Rechazando llamada…' : 'Atendiendo llamada…',
+      notice:
+        action === 'reject' ? 'Rechazando llamada…' : 'Atendiendo llamada…',
     });
     sync(session);
   }
@@ -93,7 +116,9 @@ export function createCallLifecycle(store: CallStore) {
     session.cancelled = true;
     cleanup(session);
     if (session.view.callId) {
-      wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', { callId: session.view.callId });
+      wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', {
+        callId: session.view.callId,
+      });
       finish(session, reject ? 'rejected' : 'ended');
     } else {
       store.publish(session, { ending: true, notice: 'Cancelando llamada…' });
@@ -110,7 +135,10 @@ export function createCallLifecycle(store: CallStore) {
     if (enabled === undefined) {
       return;
     }
-    store.publish(session, kind === 'audio' ? { muted: !enabled } : { cameraOff: !enabled });
+    store.publish(
+      session,
+      kind === 'audio' ? { muted: !enabled } : { cameraOff: !enabled },
+    );
   }
 
   async function switchCamera() {
@@ -133,7 +161,8 @@ export function createCallLifecycle(store: CallStore) {
           deviceError: getCameraSwitchError(error),
         });
     } finally {
-      if (store.live(session)) store.publish(session, { switchingCamera: false });
+      if (store.live(session))
+        store.publish(session, { switchingCamera: false });
     }
   }
 
@@ -144,10 +173,16 @@ export function createCallLifecycle(store: CallStore) {
     session.syncId = crypto.randomUUID();
     session.nextSync = Date.now() + 5000;
     if (session.view.callId) {
-      wsClient.emit('CALL_SYNC', { syncId: session.syncId, callId: session.view.callId });
+      wsClient.emit('CALL_SYNC', {
+        syncId: session.syncId,
+        callId: session.view.callId,
+      });
     } else {
       if (session.requestId) {
-        wsClient.emit('CALL_SYNC', { syncId: session.syncId, requestId: session.requestId });
+        wsClient.emit('CALL_SYNC', {
+          syncId: session.syncId,
+          requestId: session.requestId,
+        });
       }
     }
   }
@@ -213,7 +248,11 @@ export function createCallLifecycle(store: CallStore) {
     session.rtc.close();
   }
 
-  function finish(session: Session, status: CallStatus = 'ended', notice?: string) {
+  function finish(
+    session: Session,
+    status: CallStatus = 'ended',
+    notice?: string,
+  ) {
     if (session.closed) {
       return;
     }
@@ -235,7 +274,10 @@ export function createCallLifecycle(store: CallStore) {
   }
 
   function fail(session: Session, error: unknown) {
-    const message = error instanceof Error ? error.message : 'No se pudo establecer la llamada';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'No se pudo establecer la llamada';
     store.publish(session, { error: message });
     if (session.view.status !== 'connected') {
       if (session.view.callId) {

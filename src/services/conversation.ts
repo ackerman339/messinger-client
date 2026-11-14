@@ -55,7 +55,9 @@ export const conversationService = {
       { params: { ...params, conversationId } },
     );
 
-    return response.data.result;
+    const result = response.data.result;
+    // The API returns newest first; the chat displays each page oldest first.
+    return { ...result, page: [...result.page].reverse() };
   },
 
   deleteMessages: async (data: DeleteMessagesDto) => {

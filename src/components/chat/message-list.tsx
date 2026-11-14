@@ -11,8 +11,9 @@ import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
 import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
 import { MessageAttachment } from '@/components/chat/attachments/message-attachment';
+import { ConversationEventMessage } from '@/components/chat/conversation-event-message';
 
-import type { Message } from '@/types/conversation';
+import type { Message, CallConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
   const { activeConversation, isLoadingAttachment, isChatEmpty, handleEmptyChat } =
@@ -113,9 +114,29 @@ export function MessageList() {
       setItems((prev) => [...prev, message]);
     });
 
+    function appendCallEvent({ conversationEvent }: { conversationEvent?: CallConversationEvent }) {
+      if (!conversationEvent || conversationEvent.conversationId !== activeConversation?.id) return;
+      enableScrollToBottom.current = true;
+      setItems((current) => [
+        ...current,
+        {
+          ...conversationEvent,
+          messageId: conversationEvent.id,
+          senderId: conversationEvent.actorId,
+          content: '',
+          attachments: [],
+          conversation: activeConversation!,
+        },
+      ]);
+    }
+    const offEnd = wsClient.on('CALL_END', appendCallEvent);
+    const offReject = wsClient.on('CALL_REJECT', appendCallEvent);
+
     return () => {
       unsubscribeNewMessage();
       unsubscribeSentMessage();
+      offEnd();
+      offReject();
     };
   }, [items, setItems, activeConversation, scrollToBottom]);
 
@@ -301,6 +322,10 @@ type MessageBubbleProps = {
 
 function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
+
+  if (message.type && message.type !== 'MESSAGE') {
+    return <ConversationEventMessage message={message} isOwn={!!user && message.metadata?.callerId === user.id} />;
+  }
 
   const isOwn = message.senderId === user?.id;
   const messageId = message.messageId || message.id;

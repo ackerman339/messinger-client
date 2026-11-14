@@ -609,8 +609,9 @@ test('a camera permission failure is displayed without ending or renegotiating t
 
 test('CALL_INIT includes the trimmed current client username', t => {
   const client = setup(t);
-  client.start('callee', 'video', '  María Pérez  ');
+  client.start('callee', 'video', '  María Pérez  ', 'conversation');
   assert.equal(sent[0].data.callerName, 'María Pérez');
+  assert.equal(sent[0].data.conversationId, 'conversation');
 });
 
 test('CALL_INCOMING keeps callerName across duplicate events', t => {
