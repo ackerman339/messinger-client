@@ -35,7 +35,7 @@ export type Candidate = Reference & {
 };
 
 export interface CallClientPayloads {
-  CALL_INIT: { requestId: string; calleeId: string; media: CallMedia };
+  CALL_INIT: { requestId: string; calleeId: string; media: CallMedia; callerName?: string };
   CALL_ACCEPT: Reference;
   CALL_REJECT: Reference;
   CALL_END: Reference;
@@ -95,6 +95,7 @@ export interface CallServerPayloads {
   };
   CALL_INCOMING: Reference & {
     callerId: string;
+    callerName?: string;
     media: CallMedia;
     createdAt: string;
     expiresAt: string | null;
@@ -111,6 +112,7 @@ export interface CallServerPayloads {
   };
   CALL_REJECT: Reference & { status: CallStatus; endedAt?: string | null };
   CALL_END: Reference & {
+    callerName?: string;
     status?: CallStatus;
     endedAt?: string | null;
     endedBy?: string;

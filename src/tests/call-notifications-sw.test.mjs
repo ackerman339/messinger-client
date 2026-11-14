@@ -308,3 +308,26 @@ test('missed notifications cannot accept or reject a call', async (t) => {
   );
   assert.deepEqual(opened, ['/chat']);
 });
+
+test('incoming web push displays callerName when the app is closed', async (t) => {
+  const shown = [];
+  await dispatchPush(t, {
+    title: 'Llamada entrante',
+    body: 'Tienes una videollamada entrante.',
+    data: { type: 'call-incoming', callId, callerName: 'María Pérez' },
+  }, { showNotification: async (...args) => shown.push(args) });
+  assert.equal(shown[0][0], 'María Pérez');
+  assert.equal(shown[0][1].data.callerName, 'María Pérez');
+});
+
+test('missed web push shows who called even with the app closed', async (t) => {
+  const shown = [];
+  await dispatchPush(t, {
+    title: 'Llamada perdida', body: 'Tienes una llamada sin contestar.',
+    data: { type: 'call-missed', callId, callerName: 'María Pérez' },
+  }, {
+    getNotifications: async () => [],
+    showNotification: async (...args) => shown.push(args),
+  });
+  assert.equal(shown[0][0], 'Llamada perdida de María Pérez');
+});

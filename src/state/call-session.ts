@@ -6,6 +6,7 @@ import { createPeerSession } from '../rtc/peer-session';
 export interface CallView {
   callId?: string;
   participantId: string;
+  participantName?: string;
   media: CallMedia;
   incoming: boolean;
   answering?: boolean;

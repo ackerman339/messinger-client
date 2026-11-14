@@ -5,7 +5,7 @@ import type { CallStore } from '../state/call-store';
 import type { CallSession as Session } from '../state/call-session';
 import { wsClient } from '@/clients/websocket-client';
 export function createCallLifecycle(store: CallStore) {
-  function start(participantId: string, media: CallMedia) {
+  function start(participantId: string, media: CallMedia, callerName?: string) {
     const current = store.getSession();
     if (current && !current.closed) {
       return;
@@ -24,7 +24,13 @@ export function createCallLifecycle(store: CallStore) {
     );
     store.setSession(session);
     store.publish(session);
-    wsClient.emit('CALL_INIT', { requestId: session.requestId!, calleeId: participantId, media });
+    const name = callerName?.trim().slice(0, 100);
+    wsClient.emit('CALL_INIT', {
+      requestId: session.requestId!,
+      calleeId: participantId,
+      media,
+      ...(name ? { callerName: name } : {}),
+    });
   }
 
   function respondFromNotification(callId: string, action: 'accept' | 'reject') {

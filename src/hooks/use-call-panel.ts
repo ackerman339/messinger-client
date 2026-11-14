@@ -46,10 +46,10 @@ export function useCallPanel() {
 
   useCallSound(getCallSound(call), call?.incoming ? call.callId : call?.participantId);
   const audioOutput = useCallAudioOutput(!!call && !terminal, call?.local);
-  let participantName = 'Contacto';
+  let participantName = call?.participantName || 'Contacto';
   for (const conversation of conversations.values()) {
     const member = conversation.members.find((member) => member.userId === call?.participantId);
-    if (member?.username) {
+    if (!call?.participantName && member?.username) {
       participantName = member.username;
       break;
     }

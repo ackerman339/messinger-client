@@ -3,12 +3,14 @@ import { useEffect, useState } from 'react';
 import { createCallClient } from '@clients/call-client';
 import { createCallNotifications } from '@services/call-notifications';
 import { CallContext } from '@context/call-context';
+import { useUserContext } from '@context/user-context';
 
 import type { ReactNode } from 'react';
 import type { CallMedia } from '@/types/call';
 import type { CallView } from '@/state/call-session';
 
 export function CallProvider({ children }: { children: ReactNode }) {
+  const { user } = useUserContext();
   const [client] = useState(() => createCallClient());
   const [call, setCall] = useState<CallView | null>(null);
 
@@ -38,7 +40,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   useNotificationCallAction(client);
 
   function handleStartCall(participantId: string, media: CallMedia) {
-    client.start(participantId, media);
+    client.start(participantId, media, user?.username);
   }
 
   function handleAcceptCall() {

@@ -177,7 +177,7 @@ interface CallPushPayload {
   title: string;
   body: string;
   icon?: string;
-  data: { type: 'call-incoming' | 'call-missed'; callId: string; expiresAt?: string | null };
+  data: { type: 'call-incoming' | 'call-missed'; callId: string; callerName?: string; expiresAt?: string | null };
 }
 
 async function showCallPushNotification({ title, body, icon, data }: CallPushPayload) {
@@ -194,7 +194,11 @@ async function showCallPushNotification({ title, body, icon, data }: CallPushPay
     for (const notification of ringing) notification.close();
   }
 
-  await self.registration.showNotification(title, {
+  const callerName = typeof data.callerName === 'string' ? data.callerName.trim().slice(0, 100) : '';
+  const notificationTitle = incoming
+    ? (callerName || title)
+    : (callerName ? `Llamada perdida de ${callerName}` : title);
+  await self.registration.showNotification(notificationTitle, {
     body,
     icon,
     data,

@@ -606,3 +606,37 @@ test('a camera permission failure is displayed without ending or renegotiating t
   assert.equal(sent.length, before);
   assert.equal(media.getVideoTracks()[0].readyState, 'live');
 });
+
+test('CALL_INIT includes the trimmed current client username', t => {
+  const client = setup(t);
+  client.start('callee', 'video', '  María Pérez  ');
+  assert.equal(sent[0].data.callerName, 'María Pérez');
+});
+
+test('CALL_INCOMING keeps callerName across duplicate events', t => {
+  const client = setup(t);
+  events.get('CALL_INCOMING')({ ...incoming, callerName: 'María Pérez' });
+  assert.equal(client.getSnapshot().participantName, 'María Pérez');
+  events.get('CALL_INCOMING')({ ...incoming, callerName: undefined });
+  assert.equal(client.getSnapshot().participantName, 'María Pérez');
+  events.get('CALL_INCOMING')({ ...incoming, callerName: 'María actualizada' });
+  assert.equal(client.getSnapshot().participantName, 'María actualizada');
+});
+
+test('incoming browser notification displays callerName without a conversations lookup', async t => {
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update({ ...incomingView, participantName: 'María Pérez' });
+  await flush();
+  assert.equal(shown[0].title, 'María Pérez');
+});
+
+test('missed CALL_END supplies callerName for the web missed notification', async t => {
+  const client = setup(t);
+  events.get('CALL_INCOMING')(incoming);
+  events.get('CALL_END')({ callId: incoming.callId, status: 'missed', reason: 'NO_ANSWER', callerName: 'María Pérez' });
+  assert.equal(client.getSnapshot().participantName, 'María Pérez');
+  const { notifications, shown } = mockNotifications(t);
+  notifications.update(client.getSnapshot());
+  await flush();
+  assert.equal(shown[0].title, 'Llamada perdida de María Pérez');
+});

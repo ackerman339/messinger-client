@@ -19,7 +19,8 @@ async function showCallNotification(
   if (getCallNotificationPermission() !== 'granted') return;
 
   const incoming = kind === 'call-incoming';
-  const title = incoming ? 'Llamada entrante' : 'Llamada perdida';
+  const name = call.participantName?.trim();
+  const title = incoming ? (name || 'Llamada entrante') : (name ? `Llamada perdida de ${name}` : 'Llamada perdida');
   const media = call.media === 'video' ? 'videollamada' : 'llamada de voz';
   const tag = `messinger:${kind}:${call.callId}`;
   const options: NotificationOptions = {
