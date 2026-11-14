@@ -324,7 +324,12 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
 
   if (message.type && message.type !== 'MESSAGE') {
-    return <ConversationEventMessage message={message} isOwn={!!user && message.metadata?.callerId === user.id} />;
+    return (
+      <ConversationEventMessage
+        message={message}
+        isOwn={!!user && message.metadata?.callerId === user.id}
+      />
+    );
   }
 
   const isOwn = message.senderId === user?.id;
@@ -388,7 +393,7 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
 
         <div className='mt-1 flex items-center justify-end gap-1 text-[11px] text-text-secondary'>
           <time>
-            {format(new Date(message.createdAt), 'dd MMM HH:mm', {
+            {format(new Date(message.createdAt), 'dd MMM hh:mm a', {
               locale: es,
             })}
           </time>
