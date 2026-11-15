@@ -48,7 +48,9 @@ export function useCursorPagination<TItem>({
           return;
         }
 
-        setItems((prev) => (reverse ? [...response.page, ...prev] : [...prev, ...response.page]));
+        setItems((prev) =>
+          reverse ? [...response.page, ...prev] : [...prev, ...response.page],
+        );
 
         const newCursor = response.nextCursor ?? null;
 
@@ -59,7 +61,9 @@ export function useCursorPagination<TItem>({
           return;
         }
 
-        setError(err instanceof Error ? err : new Error('Error al cargar datos'));
+        setError(
+          err instanceof Error ? err : new Error('Error al cargar datos'),
+        );
       } finally {
         if (requestId === requestIdRef.current) {
           loadingRef.current = false;
@@ -85,6 +89,7 @@ export function useCursorPagination<TItem>({
     previousDepsRef.current = deps;
 
     requestIdRef.current += 1;
+    loadingRef.current = false;
 
     setItems([]);
     setNextCursor(null);
@@ -115,6 +120,7 @@ export function useCursorPagination<TItem>({
 
   const refresh = useCallback(() => {
     requestIdRef.current += 1;
+    loadingRef.current = false;
 
     setItems([]);
     setNextCursor(null);

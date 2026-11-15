@@ -1,18 +1,21 @@
+import { HeaderButton } from './header-button';
 import { useLayoutEffect, useState } from 'react';
-import { Avatar, DropdownMenu } from 'radix-ui';
-import { ArrowLeft, EllipsisVertical, MicSignal, BrushCleaning } from 'lucide-react';
+import { Avatar } from 'radix-ui';
+import { ArrowLeft } from 'lucide-react';
 import { CallButtons } from '@/calls/componentes/call-buttons';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { formatLastSeen } from '@lib/utils';
-import { conversationService } from '@services/conversation';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { wsClient } from '@clients/websocket-client';
 
 export function ChatHeader() {
   const { user } = useUserContext();
   const { activeConversation, unSetCurrentConversation } = useChatContext();
-  const [presence, setPresence] = useState<{ online: boolean; lastSeenAt: Date | null }>({
+  const [presence, setPresence] = useState<{
+    online: boolean;
+    lastSeenAt: Date | null;
+  }>({
     online: false,
     lastSeenAt: null,
   });
@@ -80,8 +83,14 @@ export function ChatHeader() {
           </button>
         </div>
         <Avatar.Root className='grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
-          <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
-          <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
+          <Avatar.Image
+            className='size-full object-cover'
+            src={undefined}
+            alt=''
+          />
+          <Avatar.Fallback>
+            {title ? title.slice(0, 2).toUpperCase() : ''}
+          </Avatar.Fallback>
         </Avatar.Root>
         <div className='min-w-0'>
           <h1 className='truncate text-base font-semibold'>{title}</h1>
@@ -108,64 +117,5 @@ export function ChatHeader() {
         <HeaderButton />
       </div>
     </header>
-  );
-}
-
-function HeaderButton() {
-  const { user } = useUserContext();
-  const { activeConversation, handleEmptyChat } = useChatContext();
-
-  const privateConversationMember = activeConversation?.members.filter(
-    (member) => member.userId !== user?.id,
-  )[0];
-
-  async function handleRequestConnection() {
-    await conversationService.requestUserConnection({
-      senderName: user!.username,
-      conversationId: activeConversation!.id,
-      targetUserId: privateConversationMember!.userId,
-    });
-  }
-
-  async function handleEmptyMessages() {
-    await conversationService.emptyMessages({ conversationId: activeConversation!.id });
-    handleEmptyChat();
-  }
-
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger asChild>
-        <button
-          type='button'
-          className='grid size-10 place-items-center rounded-full cursor-pointer text-text-secondary hover:bg-slate-100'
-          aria-label='Menu'
-        >
-          <EllipsisVertical size={22} />
-        </button>
-      </DropdownMenu.Trigger>
-
-      <DropdownMenu.Portal>
-        <DropdownMenu.Content
-          align='start'
-          sideOffset={8}
-          className='z-50 min-w-52 rounded-lg border border-border bg-bg-app p-1 shadow-lg'
-        >
-          <DropdownMenu.Item
-            className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
-            onSelect={handleRequestConnection}
-          >
-            <MicSignal size={18} />
-            <span>Solicitar que se conecte</span>
-          </DropdownMenu.Item>
-          <DropdownMenu.Item
-            className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
-            onSelect={handleEmptyMessages}
-          >
-            <BrushCleaning size={18} />
-            <span>Vaciar chat</span>
-          </DropdownMenu.Item>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu.Root>
   );
 }

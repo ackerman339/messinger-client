@@ -19,20 +19,26 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get('conversationId');
 
-  const [conversations, setConversations] = useState<Map<string, Conversation>>(new Map());
+  const [conversations, setConversations] = useState<Map<string, Conversation>>(
+    new Map(),
+  );
   const [activeConversationId, setActiveConversationId] = useState('');
   const [receiverId, setReceiverId] = useState('');
   const [isLoadingAttachment, setIsLoadingAttachment] = useState(false);
-  const [isChatEmpty, setIsChatEmpty] = useState(false);
+  const [emptiedConversation, setEmptiedConversation] = useState<Pick<
+    Conversation,
+    'id'
+  > | null>(null);
 
-  const { items, isLoading, hasMore, loadMore } = useCursorPagination<Conversation>({
-    fetchPage: (cursor) =>
-      conversationService.getBootstrap({
-        cursor,
-        limit: 20,
-      }),
-    deps: [],
-  });
+  const { items, isLoading, hasMore, loadMore } =
+    useCursorPagination<Conversation>({
+      fetchPage: (cursor) =>
+        conversationService.getBootstrap({
+          cursor,
+          limit: 20,
+        }),
+      deps: [],
+    });
 
   /**
    * Merge paginated conversations into the context map.
@@ -114,7 +120,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   async function prepareAttachments(files: File[]) {
     setIsLoadingAttachment(true);
     const mappedFiles = files.map((file) => ({
-      contentType: (file.type || 'application/octet-stream') as UploadContentType,
+      contentType: (file.type ||
+        'application/octet-stream') as UploadContentType,
       size: file.size,
       fileName: file.name,
     }));
@@ -134,7 +141,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     await Promise.all(
       attachments.map(async (item) => {
         const upload = files.find((file) => file.name === item.fileName);
-        const uploadItem = uploadItems.find((upload) => upload.key === item.storageKey);
+        const uploadItem = uploadItems.find(
+          (upload) => upload.key === item.storageKey,
+        );
 
         if (!upload || !uploadItem) {
           throw new Error(`No presigned URL for ${item.fileName}`);
@@ -147,7 +156,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     return attachments;
   }
 
-  function handleSendMessage(content: string, attachments: FileAttachment[] = []) {
+  function handleSendMessage(
+    content: string,
+    attachments: FileAttachment[] = [],
+  ) {
     if (activeConversation && activeConversation.type === 'GROUP') {
       wsClient.emit(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, {
         content,
@@ -159,7 +171,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     const targetReceiverId =
       receiverId ||
-      activeConversation?.members.filter((member) => member.userId !== user?.id)[0].userId;
+      activeConversation?.members.filter(
+        (member) => member.userId !== user?.id,
+      )[0].userId;
 
     if (!targetReceiverId) {
       return;
@@ -172,8 +186,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     });
   }
 
-  function handleEmptyChat() {
-    setIsChatEmpty((prev) => !prev);
+  function handleEmptyChat(conversationId: string) {
+    setConversations((previous) => {
+      const conversation = previous.get(conversationId);
+      if (!conversation) return previous;
+      const next = new Map(previous);
+      next.set(conversationId, {
+        ...conversation,
+        messages: [],
+        messagesCursor: null,
+        lastMessage: undefined,
+        members: conversation.members.map((member) =>
+          member.userId === user?.id ? { ...member, unreadCount: 0 } : member,
+        ),
+      });
+      return next;
+    });
+    setEmptiedConversation({ id: conversationId });
   }
 
   return (
@@ -186,7 +215,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         receiverId,
         hasMoreConversations: hasMore,
         isLoadingAttachment,
-        isChatEmpty,
+        emptiedConversation,
         handleSendMessage,
         handleCurrentConversation,
         prepareAttachments,

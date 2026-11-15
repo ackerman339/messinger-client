@@ -22,12 +22,8 @@ import { ConversationEventMessage } from '@/components/chat/conversation-event-m
 import type { Message, CallConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
-  const {
-    activeConversation,
-    isLoadingAttachment,
-    isChatEmpty,
-    handleEmptyChat,
-  } = useChatContext();
+  const { activeConversation, isLoadingAttachment, emptiedConversation } =
+    useChatContext();
   const hasConversation = !!activeConversation;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
@@ -51,7 +47,7 @@ export function MessageList() {
    */
   const isLoadingMoreRef = useRef(false);
 
-  const { items, isLoading, hasMore, loadMore, setItems } =
+  const { items, isLoading, hasMore, loadMore, setItems, refresh } =
     useCursorPagination<Message>({
       fetchPage: (cursor) =>
         conversationService.getMessages(activeConversation!.id, {
@@ -274,14 +270,18 @@ export function MessageList() {
     };
   }, [items, scrollToBottom]);
 
+  // Reset local state after the provider reports a successful explicit clear action.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (!isChatEmpty) {
+    if (
+      !emptiedConversation ||
+      emptiedConversation.id !== activeConversation?.id
+    )
       return;
-    }
-
-    setItems([]);
-    handleEmptyChat();
-  }, [isChatEmpty, handleEmptyChat, setItems]);
+    refresh();
+    setSelectedMessageIds([]);
+  }, [emptiedConversation, activeConversation?.id, refresh]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function toggleMessageSelection(messageId: string) {
     setSelectedMessageIds((current) => {

@@ -10,7 +10,11 @@ import { conversationService } from '@/services/conversation';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { wsClient } from '@clients/websocket-client';
 
-import type { Conversation, Message, CallConversationEvent } from '@/types/conversation';
+import type {
+  Conversation,
+  Message,
+  CallConversationEvent,
+} from '@/types/conversation';
 
 export function ConversationList() {
   const [activeTab, setActiveTab] = useState('chats');
@@ -27,7 +31,8 @@ export function ConversationList() {
   const viewportRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: loadMoreConversations,
-    enabled: activeTab === 'chats' && hasMoreConversations && !loadingConversations,
+    enabled:
+      activeTab === 'chats' && hasMoreConversations && !loadingConversations,
     rootRef: viewportRef,
     rootMargin: '10px',
   });
@@ -108,7 +113,9 @@ export function ConversationList() {
             </label>
           </div>
           <div ref={viewportRef} className='min-h-0 flex-1 overflow-y-auto p-2'>
-            {loadingConversations && <ListState label='Cargando conversaciones...' />}
+            {loadingConversations && (
+              <ListState label='Cargando conversaciones...' />
+            )}
             {!loadingConversations && conversations.size === 0 ? (
               <ListState label='No tienes conversaciones aún' />
             ) : (
@@ -139,7 +146,9 @@ function getLastMessageContent(
   message?: Pick<Message, 'type' | 'metadata'> & { content?: string },
 ) {
   if (message?.type === 'CALL_ACCEPTED' || message?.type === 'CALL_END') {
-    return message.metadata?.media === 'video' ? 'Videollamada' : 'Llamada de voz';
+    return message.metadata?.media === 'video'
+      ? 'Videollamada'
+      : 'Llamada de voz';
   }
   return message?.content ?? '';
 }
@@ -150,9 +159,13 @@ type ConversationRowProps = {
   onSelect: () => void;
 };
 
-function ConversationRow({ conversation, isActive, onSelect }: ConversationRowProps) {
+function ConversationRow({
+  conversation,
+  isActive,
+  onSelect,
+}: ConversationRowProps) {
   const { user } = useUserContext();
-  const { activeConversation } = useChatContext();
+  const { activeConversation, emptiedConversation } = useChatContext();
 
   const privateConversationMember = conversation?.members.filter(
     (member) => member.userId !== user?.id,
@@ -179,59 +192,93 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
     getLastMessageContent(conversation.lastMessage),
   );
 
+  // Reset local state after the provider reports a successful explicit clear action.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (emptiedConversation?.id !== conversation.id) return;
+    lastEntryRef.current = undefined;
+    setLastMessageContent('');
+    setUnreadMessagesCount(0);
+  }, [emptiedConversation, conversation.id]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, async (message) => {
-      if (activeConversation) {
-        if (message.conversation.id === conversation.id) {
-          if (activeConversation.id !== conversation.id) {
-            setUnreadMessagesCount((prev) => prev + 1);
+    const unsubscribeNewMessage = wsClient.on(
+      WS_SERVER_EVENTS.NEW_MESSAGE,
+      async (message) => {
+        if (activeConversation) {
+          if (message.conversation.id === conversation.id) {
+            if (activeConversation.id !== conversation.id) {
+              setUnreadMessagesCount((prev) => prev + 1);
+            }
+            lastEntryRef.current = message;
+            setLastMessageContent(getLastMessageContent(message));
+            await conversationService.resetUnreadMessagesCount({
+              conversationId: activeConversation.id,
+            });
           }
-          lastEntryRef.current = message;
-          setLastMessageContent(getLastMessageContent(message));
-          await conversationService.resetUnreadMessagesCount({
-            conversationId: activeConversation.id,
-          });
+        } else {
+          if (message.conversation.id === conversation.id) {
+            setUnreadMessagesCount((prev) => prev + 1);
+            lastEntryRef.current = message;
+            setLastMessageContent(getLastMessageContent(message));
+          }
         }
-      } else {
+      },
+    );
+
+    const unsubscribeMessageSent = wsClient.on(
+      WS_SERVER_EVENTS.MESSAGE_SENT,
+      (message) => {
         if (message.conversation.id === conversation.id) {
-          setUnreadMessagesCount((prev) => prev + 1);
           lastEntryRef.current = message;
           setLastMessageContent(getLastMessageContent(message));
         }
-      }
-    });
+      },
+    );
 
-    const unsubscribeMessageSent = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
-      if (message.conversation.id === conversation.id) {
-        lastEntryRef.current = message;
-        setLastMessageContent(getLastMessageContent(message));
-      }
-    });
-
-    function handleCallEvent({ conversationEvent }: { conversationEvent?: CallConversationEvent }) {
-      if (!conversationEvent || conversationEvent.conversationId !== conversation.id) return;
+    function handleCallEvent({
+      conversationEvent,
+    }: {
+      conversationEvent?: CallConversationEvent;
+    }) {
+      if (
+        !conversationEvent ||
+        conversationEvent.conversationId !== conversation.id
+      )
+        return;
       lastEntryRef.current = conversationEvent;
       setLastMessageContent(getLastMessageContent(conversationEvent));
     }
     const unsubscribeCallEnd = wsClient.on('CALL_END', handleCallEvent);
     const unsubscribeCallReject = wsClient.on('CALL_REJECT', handleCallEvent);
 
-    const unsubscribeHistoryDeleted = wsClient.on('CALL_HISTORY_DELETED', async ({ callId }) => {
-      const entry = lastEntryRef.current;
-      if (!entry || (entry.type !== 'CALL_ACCEPTED' && entry.type !== 'CALL_END')) return;
-      if (callId && entry.metadata?.callId !== callId) return;
-      try {
-        const result = await conversationService.getMessages(conversation.id, {
-          cursor: null,
-          limit: 1,
-        });
-        if (lastEntryRef.current !== entry) return;
-        lastEntryRef.current = result.page[0];
-        setLastMessageContent(getLastMessageContent(result.page[0]));
-      } catch {
-        // The next bootstrap will refresh the preview if the connection is unavailable.
-      }
-    });
+    const unsubscribeHistoryDeleted = wsClient.on(
+      'CALL_HISTORY_DELETED',
+      async ({ callId }) => {
+        const entry = lastEntryRef.current;
+        if (
+          !entry ||
+          (entry.type !== 'CALL_ACCEPTED' && entry.type !== 'CALL_END')
+        )
+          return;
+        if (callId && entry.metadata?.callId !== callId) return;
+        try {
+          const result = await conversationService.getMessages(
+            conversation.id,
+            {
+              cursor: null,
+              limit: 1,
+            },
+          );
+          if (lastEntryRef.current !== entry) return;
+          lastEntryRef.current = result.page[0];
+          setLastMessageContent(getLastMessageContent(result.page[0]));
+        } catch {
+          // The next bootstrap will refresh the preview if the connection is unavailable.
+        }
+      },
+    );
 
     return () => {
       unsubscribeNewMessage();
@@ -260,8 +307,14 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
       onClick={onSelect}
     >
       <Avatar.Root className='relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
-        <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
-        <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
+        <Avatar.Image
+          className='size-full object-cover'
+          src={undefined}
+          alt=''
+        />
+        <Avatar.Fallback>
+          {title ? title.slice(0, 2).toUpperCase() : ''}
+        </Avatar.Fallback>
       </Avatar.Root>
 
       <span className='min-w-0'>
@@ -284,7 +337,9 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
 
       {unreadMessageCount > 0 && (
         <div className='grid place-content-center size-7 rounded-full bg-accent'>
-          <span className='text-[10px] text-white font-bold'>{unreadMessageCount}</span>
+          <span className='text-[10px] text-white font-bold'>
+            {unreadMessageCount}
+          </span>
         </div>
       )}
     </button>
@@ -292,5 +347,9 @@ function ConversationRow({ conversation, isActive, onSelect }: ConversationRowPr
 }
 
 function ListState({ label }: { label: string }) {
-  return <div className='px-4 py-8 text-center text-sm text-text-secondary'>{label}</div>;
+  return (
+    <div className='px-4 py-8 text-center text-sm text-text-secondary'>
+      {label}
+    </div>
+  );
 }
