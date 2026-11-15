@@ -79,14 +79,14 @@ export function ConversationList() {
         >
           <Tabs.Trigger
             value='chats'
-            className='flex items-center justify-center gap-2 border-b-2 border-transparent py-3 text-sm font-semibold text-text-secondary outline-none transition-colors hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent data-[state=active]:border-accent data-[state=active]:text-accent'
+            className='flex items-center justify-center gap-2 border-b-2 border-transparent py-3 text-sm font-semibold text-text-secondary outline-none transition-colors hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent data-[state=active]:border-accent data-[state=active]:text-accent cursor-pointer'
           >
             <MessagesSquare size={18} aria-hidden='true' />
             Chats
           </Tabs.Trigger>
           <Tabs.Trigger
             value='calls'
-            className='flex items-center justify-center gap-2 border-b-2 border-transparent py-3 text-sm font-semibold text-text-secondary outline-none transition-colors hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent data-[state=active]:border-accent data-[state=active]:text-accent'
+            className='flex items-center justify-center gap-2 border-b-2 border-transparent py-3 text-sm font-semibold text-text-secondary outline-none transition-colors hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent data-[state=active]:border-accent data-[state=active]:text-accent cursor-pointer'
           >
             <Phone size={18} aria-hidden='true' />
             Llamadas
