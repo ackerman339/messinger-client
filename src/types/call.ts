@@ -210,3 +210,17 @@ export const CALL_SERVER_EVENTS = Object.fromEntries(
 
 export const isTerminal = (status: CallStatus) =>
   ["rejected", "ended", "missed", "failed"].includes(status);
+
+export interface CallHistoryItem {
+  id: string;
+  callerId: string;
+  calleeId: string;
+  media: CallMedia;
+  status: CallStatus;
+  createdAt: string;
+  acceptedAt: string | null;
+  connectedAt: string | null;
+  endedAt: string | null;
+  caller: { id: string; username: string | null } | null;
+  callee: { id: string; username: string | null } | null;
+}

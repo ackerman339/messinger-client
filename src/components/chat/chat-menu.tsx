@@ -66,7 +66,10 @@ export function ChatMenu() {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
-      <NewMessageDialog open={newMessageOpen} onOpenChange={setNewMessageOpen} />
+      <NewMessageDialog
+        open={newMessageOpen}
+        onOpenChange={setNewMessageOpen}
+      />
     </>
   );
 }

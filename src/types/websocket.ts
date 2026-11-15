@@ -18,6 +18,7 @@ export const WS_CLIENT_EVENTS = {
 } as const;
 
 export const WS_SERVER_EVENTS = {
+  CALL_HISTORY_DELETED: 'CALL_HISTORY_DELETED',
   MESSAGE_SENT: 'MESSAGE_SENT',
   NEW_MESSAGE: 'NEW_MESSAGE',
   MESSAGE_STATUS_UPDATED: 'MESSAGE_STATUS_UPDATED',
@@ -167,6 +168,7 @@ export interface WsServerPayloads extends CallServerPayloads {
   [WS_SERVER_EVENTS.TYPING_STOPPED]: {
     userId: string;
   };
+  [WS_SERVER_EVENTS.CALL_HISTORY_DELETED]: { callId?: string };
   [WS_SERVER_EVENTS.ERROR]: {
     success: false;
     error: {

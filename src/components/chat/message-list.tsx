@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LoaderCircle } from 'lucide-react';
@@ -16,12 +22,17 @@ import { ConversationEventMessage } from '@/components/chat/conversation-event-m
 import type { Message, CallConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
-  const { activeConversation, isLoadingAttachment, isChatEmpty, handleEmptyChat } =
-    useChatContext();
+  const {
+    activeConversation,
+    isLoadingAttachment,
+    isChatEmpty,
+    handleEmptyChat,
+  } = useChatContext();
   const hasConversation = !!activeConversation;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
-  const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] = useState(false);
+  const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] =
+    useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -40,15 +51,16 @@ export function MessageList() {
    */
   const isLoadingMoreRef = useRef(false);
 
-  const { items, isLoading, hasMore, loadMore, setItems } = useCursorPagination<Message>({
-    fetchPage: (cursor) =>
-      conversationService.getMessages(activeConversation!.id, {
-        cursor,
-        limit: 20,
-      }),
-    reverse: true,
-    deps: [activeConversation?.id],
-  });
+  const { items, isLoading, hasMore, loadMore, setItems } =
+    useCursorPagination<Message>({
+      fetchPage: (cursor) =>
+        conversationService.getMessages(activeConversation!.id, {
+          cursor,
+          limit: 20,
+        }),
+      reverse: true,
+      deps: [activeConversation?.id],
+    });
 
   /**
    * Load the next page of older messages.
@@ -96,26 +108,40 @@ export function MessageList() {
   }, []);
 
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-      if (activeConversation?.id !== message.conversation.id) {
+    const unsubscribeNewMessage = wsClient.on(
+      WS_SERVER_EVENTS.NEW_MESSAGE,
+      (message) => {
+        if (activeConversation?.id !== message.conversation.id) {
+          return;
+        }
+
+        enableScrollToBottom.current = true;
+        setItems((prev) => [...prev, message]);
+      },
+    );
+
+    const unsubscribeSentMessage = wsClient.on(
+      WS_SERVER_EVENTS.MESSAGE_SENT,
+      (message) => {
+        if (activeConversation?.id !== message.conversation.id) {
+          return;
+        }
+
+        enableScrollToBottom.current = true;
+        setItems((prev) => [...prev, message]);
+      },
+    );
+
+    function appendCallEvent({
+      conversationEvent,
+    }: {
+      conversationEvent?: CallConversationEvent;
+    }) {
+      if (
+        !conversationEvent ||
+        conversationEvent.conversationId !== activeConversation?.id
+      )
         return;
-      }
-
-      enableScrollToBottom.current = true;
-      setItems((prev) => [...prev, message]);
-    });
-
-    const unsubscribeSentMessage = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
-      if (activeConversation?.id !== message.conversation.id) {
-        return;
-      }
-
-      enableScrollToBottom.current = true;
-      setItems((prev) => [...prev, message]);
-    });
-
-    function appendCallEvent({ conversationEvent }: { conversationEvent?: CallConversationEvent }) {
-      if (!conversationEvent || conversationEvent.conversationId !== activeConversation?.id) return;
       enableScrollToBottom.current = true;
       setItems((current) => [
         ...current,
@@ -129,6 +155,18 @@ export function MessageList() {
         },
       ]);
     }
+    const offHistoryDeleted = wsClient.on(
+      'CALL_HISTORY_DELETED',
+      ({ callId }) => {
+        setItems((current) =>
+          current.filter(
+            (item) =>
+              (item.type !== 'CALL_ACCEPTED' && item.type !== 'CALL_END') ||
+              (callId && item.metadata?.callId !== callId),
+          ),
+        );
+      },
+    );
     const offEnd = wsClient.on('CALL_END', appendCallEvent);
     const offReject = wsClient.on('CALL_REJECT', appendCallEvent);
 
@@ -136,6 +174,7 @@ export function MessageList() {
       unsubscribeNewMessage();
       unsubscribeSentMessage();
       offEnd();
+      offHistoryDeleted();
       offReject();
     };
   }, [items, setItems, activeConversation, scrollToBottom]);
@@ -266,7 +305,8 @@ export function MessageList() {
     });
 
     const newItems = items.filter(
-      (message) => !selectedMessageIds.includes(message.messageId || message.id),
+      (message) =>
+        !selectedMessageIds.includes(message.messageId || message.id),
     );
 
     setItems(newItems);
@@ -297,7 +337,9 @@ export function MessageList() {
         <div className='h-12 w-full lg:w-[calc(100vw-400px-48px)] flex justify-center absolute z-10 right-0'>
           <div className='p-2 w-fit flex flex-col h-fit'>
             <LoaderCircle className='animate-spin self-center text-accent mb-2' />
-            <span className='font-bold text-text-secondary/80 text-xs'>Subiendo</span>
+            <span className='font-bold text-text-secondary/80 text-xs'>
+              Subiendo
+            </span>
           </div>
         </div>
       )}
@@ -306,7 +348,9 @@ export function MessageList() {
         <MessageBubble
           key={message.messageId || message.id}
           message={message}
-          selected={selectedMessageIds.includes(message.id || message.messageId)}
+          selected={selectedMessageIds.includes(
+            message.id || message.messageId,
+          )}
           onSelect={toggleMessageSelection}
         />
       ))}
@@ -358,7 +402,9 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
       <div
         className={[
           'max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
-          isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
+          isOwn
+            ? 'rounded-br-sm bg-bg-bubble-own'
+            : 'rounded-bl-sm bg-bg-bubble-other',
         ].join(' ')}
       >
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
