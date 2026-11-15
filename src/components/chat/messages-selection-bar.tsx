@@ -1,8 +1,11 @@
-import { Trash2, X } from 'lucide-react';
+import { Copy, Trash2, X } from 'lucide-react';
 
 type MessageSelectionBarProps = {
   count: number;
   isLoading: boolean;
+  canCopy: boolean;
+  canDelete: boolean;
+  onCopy: () => void;
   onDelete: () => void;
   onClose: () => void;
 };
@@ -10,6 +13,9 @@ type MessageSelectionBarProps = {
 export function MessageSelectionBar({
   count,
   isLoading,
+  canCopy,
+  canDelete,
+  onCopy,
   onDelete,
   onClose,
 }: MessageSelectionBarProps) {
@@ -26,19 +32,37 @@ export function MessageSelectionBar({
         </button>
 
         <span className='text-sm font-medium'>
-          {count} {count === 1 ? 'mensaje seleccionado' : 'mensajes seleccionados'}
+          {count}{' '}
+          {count === 1 ? 'mensaje seleccionado' : 'mensajes seleccionados'}
         </span>
       </div>
 
-      <button
-        type='button'
-        disabled={isLoading}
-        onClick={onDelete}
-        className='flex items-center gap-2 rounded-lg px-3 py-2 text-red-500 hover:bg-red-500/10 cursor-pointer disabled:text-gray-500'
-      >
-        <Trash2 size={20} />
-        <span>Eliminar</span>
-      </button>
+      <div className='flex items-center gap-2'>
+        {canCopy && (
+          <button
+            type='button'
+            disabled={isLoading}
+            onClick={onCopy}
+            aria-label='Copiar texto'
+            className='flex items-center gap-2 rounded-lg p-2 hover:bg-bg-hover cursor-pointer'
+          >
+            <Copy size={20} />
+            <span className='hidden sm:inline'>Copiar</span>
+          </button>
+        )}
+        {canDelete && (
+          <button
+            type='button'
+            disabled={isLoading}
+            onClick={onDelete}
+            aria-label='Eliminar mensajes'
+            className='flex items-center gap-2 rounded-lg px-3 py-2 text-red-500 hover:bg-red-500/10 cursor-pointer disabled:text-gray-500'
+          >
+            <Trash2 size={20} />
+            <span className='hidden sm:inline'>Eliminar</span>
+          </button>
+        )}
+      </div>
     </div>
   );
 }

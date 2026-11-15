@@ -22,6 +22,7 @@ import { ConversationEventMessage } from '@/components/chat/conversation-event-m
 import type { Message, CallConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
+  const { user } = useUserContext();
   const { activeConversation, isLoadingAttachment, emptiedConversation } =
     useChatContext();
   const hasConversation = !!activeConversation;
@@ -289,6 +290,26 @@ export function MessageList() {
         return current.filter((id) => id !== messageId);
       }
 
+      const message = items.find(
+        (item) => (item.messageId || item.id) === messageId,
+      );
+      if (!message) return current;
+      if (
+        message.senderId !== user?.id &&
+        (message.content === '' || message.attachments?.length)
+      )
+        return current;
+      if (current.length > 0) {
+        const selectedAreOwn = current.every((id) =>
+          items.some(
+            (item) =>
+              (item.messageId || item.id) === id && item.senderId === user?.id,
+          ),
+        );
+        if (!user || message.senderId !== user.id || !selectedAreOwn)
+          return current;
+      }
+
       return [...current, messageId];
     });
   }
@@ -297,7 +318,31 @@ export function MessageList() {
     setSelectedMessageIds([]);
   }
 
+  const selectedMessages = items.filter((message) =>
+    selectedMessageIds.includes(message.messageId || message.id),
+  );
+  const canDelete =
+    selectedMessages.length > 0 &&
+    selectedMessages.every((message) => !!user && message.senderId === user.id);
+  const selectedText =
+    selectedMessageIds.length === 1 &&
+    selectedMessages.length === 1 &&
+    !selectedMessages[0].attachments?.length
+      ? selectedMessages[0].content
+      : '';
+
+  async function copyMessages() {
+    if (!selectedText) return;
+    try {
+      await navigator.clipboard.writeText(selectedText);
+      clearSelection();
+    } catch {
+      window.alert('No se pudo copiar el texto. Inténtalo de nuevo.');
+    }
+  }
+
   async function deleteMessages() {
+    if (!canDelete) return;
     setIsDeleteMessagesLoading(true);
     await conversationService.deleteMessages({
       conversationId: activeConversation!.id,
@@ -328,6 +373,9 @@ export function MessageList() {
         <MessageSelectionBar
           count={selectedMessageIds.length}
           isLoading={isDeletingMesssagesLoading}
+          canCopy={selectedText !== ''}
+          canDelete={canDelete}
+          onCopy={copyMessages}
           onDelete={deleteMessages}
           onClose={clearSelection}
         />
@@ -349,7 +397,7 @@ export function MessageList() {
           key={message.messageId || message.id}
           message={message}
           selected={selectedMessageIds.includes(
-            message.id || message.messageId,
+            message.messageId || message.id,
           )}
           onSelect={toggleMessageSelection}
         />
@@ -380,11 +428,7 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const messageId = message.messageId || message.id;
 
   function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
-    if (!isOwn) {
-      return;
-    }
     event.stopPropagation();
-    console.log(event.currentTarget);
 
     onSelect(messageId);
   }
@@ -395,7 +439,9 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
       onClick={handleClick}
       className={[
         'p-2',
-        isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start',
+        isOwn
+          ? 'flex justify-end cursor-pointer'
+          : 'flex justify-start cursor-pointer',
         selected ? 'ring-1 ring-accent/10 bg-accent/10' : '',
       ].join(' ')}
     >
