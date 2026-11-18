@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { DropdownMenu } from 'radix-ui';
-import { Copy, LogOut, MessageCircle, Menu } from 'lucide-react';
+import { Copy, LogOut, MessageCircle, Menu, Users } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
 import { NewMessageDialog } from './new-message-dialog';
+import { CreateGroupDialog } from './create-group-dialog';
 
 export function ChatMenu() {
   const { user, logout } = useUserContext();
   const [newMessageOpen, setNewMessageOpen] = useState(false);
+  const [newGroupOpen, setNewGroupOpen] = useState(false);
 
   async function handleCopyUserCode() {
     if (!user?.userCode) return;
@@ -47,6 +49,14 @@ export function ChatMenu() {
 
             <DropdownMenu.Item
               className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+              onSelect={() => setNewGroupOpen(true)}
+            >
+              <Users size={18} />
+              <span>Crear nuevo grupo</span>
+            </DropdownMenu.Item>
+
+            <DropdownMenu.Item
+              className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
               onSelect={handleCopyUserCode}
             >
               <Copy size={18} />
@@ -66,6 +76,10 @@ export function ChatMenu() {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
+      <CreateGroupDialog
+        open={newGroupOpen}
+        onOpenChange={setNewGroupOpen}
+      />
       <NewMessageDialog
         open={newMessageOpen}
         onOpenChange={setNewMessageOpen}

@@ -23,6 +23,9 @@ function nodes(node) {
 }
 function fixture({
   type = 'PRIVATE',
+  role = 'MEMBER',
+  invitation,
+  isDeleted,
   empty = async () => {},
   request = async () => {},
 } = {}) {
@@ -34,9 +37,13 @@ function fixture({
   const conversation = {
     id: 'chat',
     type,
-    members: [{ userId: 'alice' }, { userId: 'bob' }],
+    invitation,
+    isDeleted,
+    members: [{ userId: 'alice', role }, { userId: 'bob' }],
   };
   const dependencies = {
+    './invite-group-dialog': { InviteGroupDialog: () => null },
+    './group-management-dialog': { GroupManagementDialog: () => null },
     react: {
       useRef: (current) => ({ current }),
       useState: (initial) => {
@@ -86,7 +93,15 @@ function fixture({
     );
     return node?.props.onSelect ?? node?.props.onClick;
   };
-  return { action, requests, emptied, cleared, notices, state, conversation };
+  return {
+    action,
+    requests,
+    emptied,
+    cleared,
+    notices,
+    state,
+    conversation,
+  };
 }
 test('private header sends the request to the other participant and reports success', async () => {
   const f = fixture();
@@ -159,4 +174,45 @@ test('completing a pending empty action clears the captured conversation only', 
   resolve();
   await pending;
   assert.deepEqual(f.cleared, ['chat']);
+});
+
+test('only group owners see the invite action', () => {
+  assert.equal(
+    typeof fixture({ type: 'GROUP', role: 'OWNER' }).action(
+      'Invitar personas',
+    ),
+    'function',
+  );
+  assert.equal(
+    fixture({ type: 'GROUP', role: 'MEMBER' }).action('Invitar personas'),
+    undefined,
+  );
+  assert.equal(
+    fixture({ type: 'PRIVATE', role: 'OWNER' }).action('Invitar personas'),
+    undefined,
+  );
+  assert.equal(
+    fixture({ type: 'GROUP', role: 'OWNER', invitation: {} }).action(
+      'Invitar personas',
+    ),
+    undefined,
+  );
+});
+
+test('group administration options match the current role and deleted state', () => {
+  const owner = fixture({ type: 'GROUP', role: 'OWNER' });
+  assert.equal(typeof owner.action('Eliminar grupo'), 'function');
+  assert.equal(typeof owner.action('Transferir propiedad'), 'function');
+  assert.equal(owner.action('Salir del grupo'), undefined);
+  const member = fixture({ type: 'GROUP', role: 'MEMBER' });
+  assert.equal(typeof member.action('Salir del grupo'), 'function');
+  assert.equal(member.action('Eliminar grupo'), undefined);
+  assert.equal(member.action('Transferir propiedad'), undefined);
+  const deleted = fixture({
+    type: 'GROUP',
+    role: 'OWNER',
+    isDeleted: true,
+  });
+  assert.equal(deleted.action('Eliminar grupo'), undefined);
+  assert.equal(deleted.action('Invitar personas'), undefined);
 });

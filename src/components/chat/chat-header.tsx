@@ -83,14 +83,8 @@ export function ChatHeader() {
           </button>
         </div>
         <Avatar.Root className='grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
-          <Avatar.Image
-            className='size-full object-cover'
-            src={undefined}
-            alt=''
-          />
-          <Avatar.Fallback>
-            {title ? title.slice(0, 2).toUpperCase() : ''}
-          </Avatar.Fallback>
+          <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
+          <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
         </Avatar.Root>
         <div className='min-w-0'>
           <h1 className='truncate text-base font-semibold'>{title}</h1>
@@ -114,7 +108,7 @@ export function ChatHeader() {
         {activeConversation.type === 'PRIVATE' && privateConversationMember && (
           <CallButtons participantId={privateConversationMember.userId} />
         )}
-        <HeaderButton />
+        {!activeConversation.invitation && <HeaderButton key={activeConversation.id} />}
       </div>
     </header>
   );

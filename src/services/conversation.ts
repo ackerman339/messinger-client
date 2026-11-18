@@ -1,7 +1,11 @@
 import { httpClient } from '@/clients/http-client';
 
 import type { Conversation, Message } from '@/types/conversation';
-import type { ApiResponse, Pagination, PaginationParams } from '@/types/services-response';
+import type {
+  ApiResponse,
+  Pagination,
+  PaginationParams,
+} from '@/types/services-response';
 export interface CreateGroupDto {
   name: string;
   members: string[]; // user UUIDs
@@ -42,18 +46,19 @@ export interface RequestUserConnectionDto {
 
 export const conversationService = {
   getBootstrap: async (params: PaginationParams) => {
-    const response = await httpClient.get<ApiResponse<Pagination<Conversation>>>(
-      '/conversation-list',
-      { params },
-    );
+    const response = await httpClient.get<
+      ApiResponse<Pagination<Conversation>>
+    >('/conversation-list', { params });
     return response.data.result;
   },
 
-  getMessages: async (conversationId: string, params: PaginationParams) => {
-    const response = await httpClient.get<ApiResponse<Pagination<Message>>>(
-      '/conversation/messages',
-      { params: { ...params, conversationId } },
-    );
+  getMessages: async (
+    conversationId: string,
+    params: PaginationParams,
+  ) => {
+    const response = await httpClient.get<
+      ApiResponse<Pagination<Message>>
+    >('/conversation/messages', { params: { ...params, conversationId } });
 
     const result = response.data.result;
     // The API returns newest first; the chat displays each page oldest first.
@@ -69,7 +74,10 @@ export const conversationService = {
   },
 
   resetUnreadMessagesCount: async (data: ResetUnreadMessagesDto) => {
-    await httpClient.patch('/conversation/reset-unread-messages-count', data);
+    await httpClient.patch(
+      '/conversation/reset-unread-messages-count',
+      data,
+    );
   },
 
   emptyMessages: async (data: DeleteConversationDto) => {
@@ -77,9 +85,15 @@ export const conversationService = {
   },
 
   // TODO: type responses
-  createGroup: (data: CreateGroupDto) => httpClient.post('/conversation/create-group', data),
+  createGroup: async (data: CreateGroupDto) => {
+    const response = await httpClient.post<
+      ApiResponse<Pick<Conversation, 'id' | 'name'>>
+    >('/conversation/create-group', data);
+    return response.data.result;
+  },
 
-  leaveGroup: (data: LeaveGroupDto) => httpClient.post('/conversation/leave-group', data),
+  leaveGroup: (data: LeaveGroupDto) =>
+    httpClient.post('/conversation/leave-group', data),
 
   transferOwnership: (data: TransferOwnershipDto) =>
     httpClient.post('/conversation/transfer-ownership', data),

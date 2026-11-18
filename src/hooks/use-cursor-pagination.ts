@@ -4,12 +4,14 @@ import type { Pagination } from '@/types/services-response';
 interface UseCursorPaginationParams<TResponse> {
   fetchPage: (cursor: string | null) => Promise<Pagination<TResponse>>;
   reverse?: boolean;
+  getItemKey?: (item: TResponse) => string;
   deps?: unknown[];
 }
 
 export function useCursorPagination<TItem>({
   fetchPage,
   reverse = false,
+  getItemKey,
   deps = [],
 }: UseCursorPaginationParams<TItem>) {
   const [items, setItems] = useState<TItem[]>([]);
@@ -21,11 +23,12 @@ export function useCursorPagination<TItem>({
   const fetchPageRef = useRef(fetchPage);
   const loadingRef = useRef(false);
   const requestIdRef = useRef(0);
-  const previousDepsRef = useRef<unknown[] | null>(null);
+  const getItemKeyRef = useRef(getItemKey);
 
   useEffect(() => {
     fetchPageRef.current = fetchPage;
-  }, [fetchPage]);
+    getItemKeyRef.current = getItemKey;
+  }, [fetchPage, getItemKey]);
 
   const loadPage = useCallback(
     async (cursor: string | null) => {
@@ -48,9 +51,19 @@ export function useCursorPagination<TItem>({
           return;
         }
 
-        setItems((prev) =>
-          reverse ? [...response.page, ...prev] : [...prev, ...response.page],
-        );
+        setItems((prev) => {
+          const merged = reverse
+            ? [...response.page, ...prev]
+            : [...prev, ...response.page];
+          const key = getItemKeyRef.current;
+          return key
+            ? [
+                ...new Map(
+                  merged.map((item) => [key(item), item]),
+                ).values(),
+              ]
+            : merged;
+        });
 
         const newCursor = response.nextCursor ?? null;
 
@@ -75,28 +88,23 @@ export function useCursorPagination<TItem>({
   );
 
   useEffect(() => {
-    const previousDeps = previousDepsRef.current;
-
-    const depsChanged =
-      previousDeps === null ||
-      previousDeps.length !== deps.length ||
-      previousDeps.some((value, index) => !Object.is(value, deps[index]));
-
-    if (!depsChanged) {
-      return;
-    }
-
-    previousDepsRef.current = deps;
-
     requestIdRef.current += 1;
     loadingRef.current = false;
 
+    // Clear the previous conversation before starting its replacement page.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setItems([]);
     setNextCursor(null);
     setHasMore(true);
     setError(null);
 
     loadPage(null);
+
+    // A late page from an old conversation must never update its replacement.
+    return () => {
+      requestIdRef.current += 1;
+      loadingRef.current = false;
+    };
 
     // Dependencies intentionally control pagination reset.
     // eslint-disable-next-line react-hooks/exhaustive-deps

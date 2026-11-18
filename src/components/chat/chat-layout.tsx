@@ -5,6 +5,7 @@ import { ChatHeader } from './chat-header';
 import { ConversationList } from './conversation-list';
 import { MessageComposer } from './message-composer';
 import { MessageList } from './message-list';
+import { GroupInvitationPanel } from './group-invitation-panel';
 
 export function ChatLayout() {
   const { activeConversation } = useChatContext();
@@ -13,36 +14,41 @@ export function ChatLayout() {
   });
 
   return (
-    <main className='min-h-screen bg-bg-chat text-text-primary'>
-      {/*Mobile layout*/}
-      {!isDesktop && (
-        <div className='h-screen lg:hidden'>
-          <ConversationList />
-          {activeConversation && (
-            <section className='absolute z-50 w-full top-0 flex flex-col h-screen bg-bg-chat opacity-100 transition-opacity duration-300 starting:opacity-0'>
-              <ChatHeader />
-              <MessageList />
-              <MessageComposer />
-            </section>
-          )}
-        </div>
-      )}
-      <div className='hidden lg:grid h-screen grid-cols-1 overflow-hidden bg-bg-app md:grid-cols-[360px_1fr] lg:grid-cols-[400px_1fr]'>
+    <main className='relative h-dvh overflow-hidden bg-bg-chat text-text-primary'>
+      <div
+        className={
+          isDesktop
+            ? 'grid h-full min-h-0 grid-cols-[360px_1fr] xl:grid-cols-[400px_1fr]'
+            : 'h-full'
+        }
+      >
         <ConversationList />
-        {!activeConversation ? (
-          <section className='chat-paper flex justify-center items-center flex-col'>
+        {activeConversation ? (
+          <section
+            key={activeConversation.id}
+            className={[
+              'flex min-h-0 min-w-0 flex-col overflow-hidden bg-bg-chat',
+              isDesktop ? 'relative h-full' : 'absolute inset-0 z-50',
+            ].join(' ')}
+          >
+            <ChatHeader />
+            {activeConversation.invitation ? (
+              <GroupInvitationPanel key={activeConversation.id} />
+            ) : (
+              <>
+                <MessageList key={activeConversation.id} />
+                <MessageComposer key={activeConversation.id} />
+              </>
+            )}
+          </section>
+        ) : isDesktop ? (
+          <section className='chat-paper flex min-h-0 flex-col items-center justify-center'>
             <MessagesSquare size={100} className='mb-2 text-accent' />
             <p className='text-3xl text-text-secondary'>
-              Selecciona una conversación o envia un mensaje
+              Selecciona una conversación o envía un mensaje
             </p>
           </section>
-        ) : (
-          <section className='flex flex-col h-screen bg-bg-chat opacity-100 transition-opacity duration-300 starting:opacity-0'>
-            <ChatHeader />
-            <MessageList />
-            <MessageComposer />
-          </section>
-        )}
+        ) : null}
       </div>
     </main>
   );

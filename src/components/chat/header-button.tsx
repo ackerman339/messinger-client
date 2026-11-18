@@ -4,12 +4,19 @@ import {
   EllipsisVertical,
   LoaderCircle,
   MicSignal,
+  UserPlus,
+  Trash2,
+  LogOut,
+  ArrowRightLeft,
   X,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useChatContext } from '@/context/chat-context';
 import { useUserContext } from '@/context/user-context';
 import { conversationService } from '@/services/conversation';
+
+import { InviteGroupDialog } from './invite-group-dialog';
+import { GroupManagementDialog } from './group-management-dialog';
 
 type Notice = { title: string; description: string; error?: boolean };
 
@@ -20,7 +27,19 @@ export function HeaderButton() {
   const [busy, setBusy] = useState(false);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [groupAction, setGroupAction] = useState<
+    'delete' | 'transfer' | 'leave' | null
+  >(null);
   const pending = useRef(false);
+  const groupMember = activeConversation?.members.find(
+    (member) => member.userId === user?.id && !member.softDeletedAt,
+  );
+  const isActiveGroup =
+    activeConversation?.type === 'GROUP' &&
+    !activeConversation.invitation &&
+    !activeConversation.isDeleted;
+  const isOwner = groupMember?.role === 'OWNER';
   const participant = activeConversation?.members.find(
     (member) => member.userId !== user?.id,
   );
@@ -81,6 +100,42 @@ export function HeaderButton() {
     }
   }
 
+  function renderGroupAction(action: 'delete' | 'transfer' | 'leave') {
+    const Icon =
+      action === 'delete'
+        ? Trash2
+        : action === 'transfer'
+          ? ArrowRightLeft
+          : LogOut;
+    return (
+      <DropdownMenu.Item
+        key={action}
+        disabled={busy}
+        aria-label={
+          action === 'delete'
+            ? 'Eliminar grupo'
+            : action === 'transfer'
+              ? 'Transferir propiedad'
+              : 'Salir del grupo'
+        }
+        onSelect={() => {
+          setOpen(false);
+          setGroupAction(action);
+        }}
+        className={`flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100 ${action === 'transfer' ? '' : 'text-danger'}`}
+      >
+        <Icon size={18} aria-hidden='true' />
+        <span>
+          {action === 'delete'
+            ? 'Eliminar grupo'
+            : action === 'transfer'
+              ? 'Transferir propiedad'
+              : 'Salir del grupo'}
+        </span>
+      </DropdownMenu.Item>
+    );
+  }
+
   if (!activeConversation) return null;
   return (
     <>
@@ -105,6 +160,26 @@ export function HeaderButton() {
             sideOffset={8}
             className='z-50 min-w-52 rounded-lg border border-border bg-bg-app p-1 shadow-lg'
           >
+            {activeConversation.type === 'GROUP' &&
+              !activeConversation.isDeleted &&
+              !activeConversation.invitation &&
+              activeConversation.members.some(
+                (member) =>
+                  member.userId === user?.id && member.role === 'OWNER',
+              ) && (
+                <DropdownMenu.Item
+                  aria-label='Invitar personas'
+                  onSelect={() => {
+                    setOpen(false);
+                    setInviteOpen(true);
+                  }}
+                  className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+                >
+                  <UserPlus size={18} />
+                  <span>Invitar personas</span>
+                </DropdownMenu.Item>
+              )}
+            {isActiveGroup && isOwner && renderGroupAction('transfer')}
             {activeConversation.type === 'PRIVATE' && participant && (
               <DropdownMenu.Item
                 disabled={busy}
@@ -115,6 +190,10 @@ export function HeaderButton() {
                 <MicSignal size={18} />
                 <span>Solicitar que se conecte</span>
               </DropdownMenu.Item>
+            )}
+            {((isActiveGroup && isOwner) ||
+              (activeConversation.type === 'PRIVATE' && participant)) && (
+              <DropdownMenu.Separator className='my-1 h-px bg-border' />
             )}
             <DropdownMenu.Item
               disabled={busy}
@@ -128,9 +207,33 @@ export function HeaderButton() {
               <BrushCleaning size={18} />
               <span>Vaciar chat</span>
             </DropdownMenu.Item>
+            {isActiveGroup &&
+              (isOwner
+                ? renderGroupAction('delete')
+                : groupMember?.role === 'MEMBER'
+                  ? renderGroupAction('leave')
+                  : null)}
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      {groupAction && isActiveGroup && (
+        <GroupManagementDialog
+          key={activeConversation.id}
+          group={activeConversation}
+          action={groupAction}
+          onClose={() => setGroupAction(null)}
+        />
+      )}
+      {inviteOpen &&
+        !activeConversation.isDeleted &&
+        activeConversation.type === 'GROUP' &&
+        !activeConversation.invitation && (
+          <InviteGroupDialog
+            key={activeConversation.id}
+            group={activeConversation}
+            onClose={() => setInviteOpen(false)}
+          />
+        )}
       <AlertDialog.Root open={confirmEmpty} onOpenChange={setConfirmEmpty}>
         <AlertDialog.Portal>
           <AlertDialog.Overlay className='fixed inset-0 z-60 bg-black/40' />
@@ -139,8 +242,8 @@ export function HeaderButton() {
               ¿Vaciar chat?
             </AlertDialog.Title>
             <AlertDialog.Description className='mt-2 text-sm text-text-secondary'>
-              Se ocultarán los mensajes y eventos de esta conversación solo para
-              ti.
+              Se ocultarán los mensajes y eventos de esta conversación solo
+              para ti.
             </AlertDialog.Description>
             <div className='mt-5 flex justify-end gap-2'>
               <AlertDialog.Cancel asChild>

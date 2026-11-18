@@ -24,7 +24,9 @@ export function MessageComposer() {
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const disabled = !activeConversation && !receiverId;
+  const disabled =
+    !!activeConversation?.isDeleted ||
+    (!activeConversation && !receiverId);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -75,7 +77,9 @@ export function MessageComposer() {
     const { selectionStart, selectionEnd } = textarea;
 
     const nextMessage =
-      message.slice(0, selectionStart) + emojiData.emoji + message.slice(selectionEnd);
+      message.slice(0, selectionStart) +
+      emojiData.emoji +
+      message.slice(selectionEnd);
 
     const cursorPosition = selectionStart + emojiData.emoji.length;
 
@@ -101,12 +105,27 @@ export function MessageComposer() {
     }
   }
 
+  if (activeConversation?.isDeleted)
+    return (
+      <footer
+        role='status'
+        className='shrink-0 border-t border-border bg-bg-app p-5 text-center text-sm text-text-secondary'
+      >
+        Este grupo fue eliminado
+      </footer>
+    );
+
   return (
     <Tooltip.Provider delayDuration={150}>
       <footer className='relative grid min-h-20 max-h-80 shrink-0 grid-cols-[auto_1fr_auto] gap-x-1 border-t border-border bg-bg-app px-2 py-3'>
         {emojiPickerOpen && (
           <div className='absolute bottom-full left-2 z-50 mb-2'>
-            <EmojiPicker emojiData={es} onEmojiClick={handleEmojiClick} width={350} height={400} />
+            <EmojiPicker
+              emojiData={es}
+              onEmojiClick={handleEmojiClick}
+              width={350}
+              height={400}
+            />
           </div>
         )}
 
@@ -177,7 +196,12 @@ type ComposerButtonProps = {
   onClick: () => void;
 };
 
-function ComposerButton({ label, icon, disabled, onClick }: ComposerButtonProps) {
+function ComposerButton({
+  label,
+  icon,
+  disabled,
+  onClick,
+}: ComposerButtonProps) {
   return (
     <Tooltip.Root>
       <Tooltip.Trigger asChild>

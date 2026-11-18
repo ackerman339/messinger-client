@@ -14,7 +14,10 @@ export type ChatContextValue = {
   hasMoreConversations: boolean;
   isLoadingAttachment: boolean;
   emptiedConversation: Pick<Conversation, 'id'> | null;
-  handleSendMessage: (content: string, attachments: FileAttachment[]) => void;
+  handleSendMessage: (
+    content: string,
+    attachments: FileAttachment[],
+  ) => void;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
   getUserByCode: (userCode: string) => Promise<Response>;
@@ -23,6 +26,12 @@ export type ChatContextValue = {
   loadMoreConversations: () => void;
   handleNewConversation: (conversation: Conversation) => void;
   handleEmptyChat: (conversationId: string) => void;
+  handleRemoveConversation: (conversationId: string) => void;
+  handleGroupDeleted: (conversationId: string) => void;
+  handleGroupOwnerChanged: (
+    conversationId: string,
+    newOwnerId: string,
+  ) => void;
 };
 
 export const ChatContext = createContext<ChatContextValue>({
@@ -43,10 +52,14 @@ export const ChatContext = createContext<ChatContextValue>({
   loadMoreConversations: () => {},
   handleNewConversation: () => {},
   handleEmptyChat: () => {},
+  handleRemoveConversation: () => {},
+  handleGroupDeleted: () => {},
+  handleGroupOwnerChanged: () => {},
 });
 
 export function useChatContext() {
   const ctx = useContext(ChatContext);
-  if (!ctx) throw new Error('useUser must be used within a <UserProvider>');
+  if (!ctx)
+    throw new Error('useUser must be used within a <UserProvider>');
   return ctx;
 }

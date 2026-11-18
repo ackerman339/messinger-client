@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Mic, Square, Trash2 } from 'lucide-react';
 import { useVoiceRecorder } from '@hooks/use-voice-recorder';
 import { useChatContext } from '@context/chat-context';
@@ -6,9 +7,23 @@ export function VoiceRecorder() {
   const { prepareAttachments, handleSendMessage, isLoadingAttachment } = useChatContext();
   const { isRecording, startRecording, stopRecording, cancelRecording } = useVoiceRecorder();
 
+  const mounted = useRef(true);
+  const cancelRef = useRef(cancelRecording);
+  useEffect(() => {
+    cancelRef.current = cancelRecording;
+  }, [cancelRecording]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      cancelRef.current();
+    };
+  }, []);
+
   async function handleStart() {
     try {
       await startRecording();
+      if (!mounted.current) cancelRef.current();
     } catch (error) {
       console.error('[voice] failed to start recording:', error);
     }

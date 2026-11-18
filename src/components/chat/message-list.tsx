@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LoaderCircle } from 'lucide-react';
@@ -23,13 +17,11 @@ import type { Message, CallConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
   const { user } = useUserContext();
-  const { activeConversation, isLoadingAttachment, emptiedConversation } =
-    useChatContext();
+  const { activeConversation, isLoadingAttachment, emptiedConversation } = useChatContext();
   const hasConversation = !!activeConversation;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
-  const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] =
-    useState(false);
+  const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   /**
@@ -48,16 +40,21 @@ export function MessageList() {
    */
   const isLoadingMoreRef = useRef(false);
 
-  const { items, isLoading, hasMore, loadMore, setItems, refresh } =
-    useCursorPagination<Message>({
-      fetchPage: (cursor) =>
-        conversationService.getMessages(activeConversation!.id, {
-          cursor,
-          limit: 20,
-        }),
-      reverse: true,
-      deps: [activeConversation?.id],
-    });
+  const { items, isLoading, hasMore, loadMore, setItems, refresh } = useCursorPagination<Message>({
+    fetchPage: (cursor) =>
+      activeConversation?.isDeleted
+        ? Promise.resolve({
+            page: [...activeConversation.messages].reverse(),
+            nextCursor: null,
+          })
+        : conversationService.getMessages(activeConversation!.id, {
+            cursor,
+            limit: 20,
+          }),
+    reverse: true,
+    getItemKey: (message) => message.messageId || message.id,
+    deps: [activeConversation?.id],
+  });
 
   /**
    * Load the next page of older messages.
@@ -105,76 +102,81 @@ export function MessageList() {
   }, []);
 
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(
-      WS_SERVER_EVENTS.NEW_MESSAGE,
-      (message) => {
-        if (activeConversation?.id !== message.conversation.id) {
-          return;
-        }
+    let live = true;
+    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
+      if (!live) return;
+      if (activeConversation?.id !== (message.conversation?.id ?? message.conversationId)) {
+        return;
+      }
 
-        enableScrollToBottom.current = true;
-        setItems((prev) => [...prev, message]);
-      },
-    );
+      enableScrollToBottom.current = true;
+      setItems((prev) =>
+        prev.some((item) => (item.messageId || item.id) === (message.messageId || message.id))
+          ? prev
+          : [...prev, message],
+      );
+    });
 
-    const unsubscribeSentMessage = wsClient.on(
-      WS_SERVER_EVENTS.MESSAGE_SENT,
-      (message) => {
-        if (activeConversation?.id !== message.conversation.id) {
-          return;
-        }
+    const unsubscribeSentMessage = wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => {
+      if (!live) return;
+      if (activeConversation?.id !== (message.conversation?.id ?? message.conversationId)) {
+        return;
+      }
 
-        enableScrollToBottom.current = true;
-        setItems((prev) => [...prev, message]);
-      },
-    );
+      enableScrollToBottom.current = true;
+      setItems((prev) =>
+        prev.some((item) => (item.messageId || item.id) === (message.messageId || message.id))
+          ? prev
+          : [...prev, message],
+      );
+    });
 
-    function appendCallEvent({
-      conversationEvent,
-    }: {
-      conversationEvent?: CallConversationEvent;
-    }) {
+    function appendCallEvent({ conversationEvent }: { conversationEvent?: CallConversationEvent }) {
       if (
+        !live ||
         !conversationEvent ||
         conversationEvent.conversationId !== activeConversation?.id
       )
         return;
       enableScrollToBottom.current = true;
-      setItems((current) => [
-        ...current,
-        {
-          ...conversationEvent,
-          messageId: conversationEvent.id,
-          senderId: conversationEvent.actorId,
-          content: '',
-          attachments: [],
-          conversation: activeConversation!,
-        },
-      ]);
+      setItems((current) =>
+        current.some((item) => (item.messageId || item.id) === conversationEvent.id)
+          ? current
+          : [
+              ...current,
+              {
+                ...conversationEvent,
+                messageId: conversationEvent.id,
+                senderId: conversationEvent.actorId,
+                content: '',
+                attachments: [],
+                conversation: activeConversation!,
+              },
+            ],
+      );
     }
-    const offHistoryDeleted = wsClient.on(
-      'CALL_HISTORY_DELETED',
-      ({ callId }) => {
-        setItems((current) =>
-          current.filter(
-            (item) =>
-              (item.type !== 'CALL_ACCEPTED' && item.type !== 'CALL_END') ||
-              (callId && item.metadata?.callId !== callId),
-          ),
-        );
-      },
-    );
+    const offHistoryDeleted = wsClient.on('CALL_HISTORY_DELETED', ({ callId }) => {
+      if (!live) return;
+      setItems((current) =>
+        current.filter(
+          (item) =>
+            (item.type !== 'CALL_ACCEPTED' && item.type !== 'CALL_END') ||
+            (callId && item.metadata?.callId !== callId),
+        ),
+      );
+    });
     const offEnd = wsClient.on('CALL_END', appendCallEvent);
     const offReject = wsClient.on('CALL_REJECT', appendCallEvent);
 
     return () => {
+      live = false;
       unsubscribeNewMessage();
       unsubscribeSentMessage();
       offEnd();
       offHistoryDeleted();
       offReject();
     };
-  }, [items, setItems, activeConversation, scrollToBottom]);
+  }, [setItems, activeConversation]);
 
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: handleLoadMore,
@@ -274,15 +276,15 @@ export function MessageList() {
   // Reset local state after the provider reports a successful explicit clear action.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (
-      !emptiedConversation ||
-      emptiedConversation.id !== activeConversation?.id
-    )
-      return;
+    if (!emptiedConversation || emptiedConversation.id !== activeConversation?.id) return;
     refresh();
     setSelectedMessageIds([]);
   }, [emptiedConversation, activeConversation?.id, refresh]);
   /* eslint-enable react-hooks/set-state-in-effect */
+
+  useEffect(() => {
+    if (activeConversation?.groupRevision && !activeConversation.isDeleted) refresh();
+  }, [activeConversation?.groupRevision, activeConversation?.isDeleted, refresh]);
 
   function toggleMessageSelection(messageId: string) {
     setSelectedMessageIds((current) => {
@@ -290,24 +292,15 @@ export function MessageList() {
         return current.filter((id) => id !== messageId);
       }
 
-      const message = items.find(
-        (item) => (item.messageId || item.id) === messageId,
-      );
+      const message = items.find((item) => (item.messageId || item.id) === messageId);
       if (!message) return current;
-      if (
-        message.senderId !== user?.id &&
-        (message.content === '' || message.attachments?.length)
-      )
+      if (message.senderId !== user?.id && (message.content === '' || message.attachments?.length))
         return current;
       if (current.length > 0) {
         const selectedAreOwn = current.every((id) =>
-          items.some(
-            (item) =>
-              (item.messageId || item.id) === id && item.senderId === user?.id,
-          ),
+          items.some((item) => (item.messageId || item.id) === id && item.senderId === user?.id),
         );
-        if (!user || message.senderId !== user.id || !selectedAreOwn)
-          return current;
+        if (!user || message.senderId !== user.id || !selectedAreOwn) return current;
       }
 
       return [...current, messageId];
@@ -350,8 +343,7 @@ export function MessageList() {
     });
 
     const newItems = items.filter(
-      (message) =>
-        !selectedMessageIds.includes(message.messageId || message.id),
+      (message) => !selectedMessageIds.includes(message.messageId || message.id),
     );
 
     setItems(newItems);
@@ -385,9 +377,7 @@ export function MessageList() {
         <div className='h-12 w-full lg:w-[calc(100vw-400px-48px)] flex justify-center absolute z-10 right-0'>
           <div className='p-2 w-fit flex flex-col h-fit'>
             <LoaderCircle className='animate-spin self-center text-accent mb-2' />
-            <span className='font-bold text-text-secondary/80 text-xs'>
-              Subiendo
-            </span>
+            <span className='font-bold text-text-secondary/80 text-xs'>Subiendo</span>
           </div>
         </div>
       )}
@@ -396,9 +386,7 @@ export function MessageList() {
         <MessageBubble
           key={message.messageId || message.id}
           message={message}
-          selected={selectedMessageIds.includes(
-            message.messageId || message.id,
-          )}
+          selected={selectedMessageIds.includes(message.messageId || message.id)}
           onSelect={toggleMessageSelection}
         />
       ))}
@@ -414,11 +402,17 @@ type MessageBubbleProps = {
 
 function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
+  const { activeConversation, conversations } = useChatContext();
 
   if (message.type && message.type !== 'MESSAGE') {
     return (
       <ConversationEventMessage
         message={message}
+        members={[
+          ...(activeConversation?.members ?? []),
+          ...(activeConversation?.knownMembers ?? []),
+          ...[...(conversations?.values() ?? [])].flatMap((conversation) => conversation.members),
+        ]}
         isOwn={!!user && message.metadata?.callerId === user.id}
       />
     );
@@ -439,18 +433,14 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
       onClick={handleClick}
       className={[
         'p-2',
-        isOwn
-          ? 'flex justify-end cursor-pointer'
-          : 'flex justify-start cursor-pointer',
+        isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start cursor-pointer',
         selected ? 'ring-1 ring-accent/10 bg-accent/10' : '',
       ].join(' ')}
     >
       <div
         className={[
           'max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
-          isOwn
-            ? 'rounded-br-sm bg-bg-bubble-own'
-            : 'rounded-bl-sm bg-bg-bubble-other',
+          isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
         ].join(' ')}
       >
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>

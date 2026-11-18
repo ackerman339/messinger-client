@@ -32,20 +32,26 @@ export function ConversationList() {
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: loadMoreConversations,
     enabled:
-      activeTab === 'chats' && hasMoreConversations && !loadingConversations,
+      activeTab === 'chats' &&
+      hasMoreConversations &&
+      !loadingConversations,
     rootRef: viewportRef,
     rootMargin: '10px',
   });
 
   const conversationsItems = [...conversations.values()].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 
   useLayoutEffect(() => {
     const unsubscribeNewConversationFrom = wsClient.on(
       WS_SERVER_EVENTS.NEW_MESSAGE,
       async (message) => {
-        if (!conversations.has(message.conversation.id)) {
+        if (
+          message.conversation &&
+          !conversations.has(message.conversation.id)
+        ) {
           handleNewConversation(message.conversation);
         }
       },
@@ -54,7 +60,10 @@ export function ConversationList() {
     const unsubscribeNewConversationTo = wsClient.on(
       WS_SERVER_EVENTS.MESSAGE_SENT,
       async (message) => {
-        if (!conversations.has(message.conversation.id)) {
+        if (
+          message.conversation &&
+          !conversations.has(message.conversation.id)
+        ) {
           handleNewConversation(message.conversation);
         }
       },
@@ -68,6 +77,11 @@ export function ConversationList() {
 
   async function handleSelect(conversationId: string) {
     handleCurrentConversation(conversationId);
+    if (
+      conversations.get(conversationId)?.invitation ||
+      conversations.get(conversationId)?.isDeleted
+    )
+      return;
     await conversationService.resetUnreadMessagesCount({ conversationId });
   }
 
@@ -76,7 +90,9 @@ export function ConversationList() {
       <aside className='flex h-full min-h-0 min-w-0 flex-col border-r border-border bg-bg-sidebar'>
         <header className='flex h-16 shrink-0 items-center gap-3 border-b border-border px-4'>
           <ChatMenu />
-          <span className='text-lg font-semibold tracking-tight'>Pulse</span>
+          <span className='text-lg font-semibold tracking-tight'>
+            Pulse
+          </span>
         </header>
         <Tabs.List
           aria-label='Chats y llamadas'
@@ -112,7 +128,10 @@ export function ConversationList() {
               />
             </label>
           </div>
-          <div ref={viewportRef} className='min-h-0 flex-1 overflow-y-auto p-2'>
+          <div
+            ref={viewportRef}
+            className='min-h-0 flex-1 overflow-y-auto p-2'
+          >
             {loadingConversations && (
               <ListState label='Cargando conversaciones...' />
             )}
@@ -181,12 +200,12 @@ function ConversationRow({
       : privateConversationMember?.username || 'Usuario Eliminado';
 
   const [unreadMessageCount, setUnreadMessagesCount] = useState(
-    privateConversationUser.unreadCount,
+    privateConversationUser?.unreadCount ?? 0,
   );
 
-  const lastEntryRef = useRef<Pick<Message, 'type' | 'metadata'> | undefined>(
-    conversation.lastMessage,
-  );
+  const lastEntryRef = useRef<
+    Pick<Message, 'type' | 'metadata'> | undefined
+  >(conversation.lastMessage);
 
   const [lastMessageContent, setLastMessageContent] = useState(
     getLastMessageContent(conversation.lastMessage),
@@ -207,7 +226,10 @@ function ConversationRow({
       WS_SERVER_EVENTS.NEW_MESSAGE,
       async (message) => {
         if (activeConversation) {
-          if (message.conversation.id === conversation.id) {
+          if (
+            (message.conversation?.id ?? message.conversationId) ===
+            conversation.id
+          ) {
             if (activeConversation.id !== conversation.id) {
               setUnreadMessagesCount((prev) => prev + 1);
             }
@@ -218,7 +240,10 @@ function ConversationRow({
             });
           }
         } else {
-          if (message.conversation.id === conversation.id) {
+          if (
+            (message.conversation?.id ?? message.conversationId) ===
+            conversation.id
+          ) {
             setUnreadMessagesCount((prev) => prev + 1);
             lastEntryRef.current = message;
             setLastMessageContent(getLastMessageContent(message));
@@ -230,7 +255,10 @@ function ConversationRow({
     const unsubscribeMessageSent = wsClient.on(
       WS_SERVER_EVENTS.MESSAGE_SENT,
       (message) => {
-        if (message.conversation.id === conversation.id) {
+        if (
+          (message.conversation?.id ?? message.conversationId) ===
+          conversation.id
+        ) {
           lastEntryRef.current = message;
           setLastMessageContent(getLastMessageContent(message));
         }
@@ -251,7 +279,10 @@ function ConversationRow({
       setLastMessageContent(getLastMessageContent(conversationEvent));
     }
     const unsubscribeCallEnd = wsClient.on('CALL_END', handleCallEvent);
-    const unsubscribeCallReject = wsClient.on('CALL_REJECT', handleCallEvent);
+    const unsubscribeCallReject = wsClient.on(
+      'CALL_REJECT',
+      handleCallEvent,
+    );
 
     const unsubscribeHistoryDeleted = wsClient.on(
       'CALL_HISTORY_DELETED',
@@ -330,7 +361,11 @@ function ConversationRow({
                   : 'text-text-secondary',
             ].join(' ')}
           >
-            {lastMessageContent}
+            {conversation.isDeleted
+              ? 'Este grupo fue eliminado'
+              : conversation.invitation
+                ? 'Invitación pendiente'
+                : lastMessageContent}
           </span>
         }
       </span>
