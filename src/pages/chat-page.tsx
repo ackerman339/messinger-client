@@ -1,3 +1,5 @@
+import { GroupCallProvider } from '@/group-calls/group-call-provider';
+import { GroupCallPanel } from '@/group-calls/group-call-panel';
 import { CallPanel } from '@/calls/componentes/call-panel';
 import { CallProvider } from '@providers/call-provider';
 import { ChatProvider } from '@providers/chat-provider';
@@ -11,8 +13,11 @@ export function ChatPage() {
       <RequireAuth>
         <CallProvider>
           <ChatProvider>
-            <ChatLayout />
-            <CallPanel />
+            <GroupCallProvider>
+              <ChatLayout />
+              <CallPanel />
+              <GroupCallPanel />
+            </GroupCallProvider>
           </ChatProvider>
         </CallProvider>
       </RequireAuth>

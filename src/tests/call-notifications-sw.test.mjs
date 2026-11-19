@@ -30,14 +30,14 @@ async function loadWorker(t, clients, registration = {}) {
   return handlers;
 }
 
-async function dispatchNotificationClick(t, clients, type, action = '') {
+async function dispatchNotificationClick(t, clients, type, action = '', extras = {}) {
   const handlers = await loadWorker(t, clients);
   const pending = [];
   let closed = false;
   handlers.get('notificationclick')({
     action,
     notification: {
-      data: { type, callId },
+      data: { type, callId, ...extras },
       close() {
         closed = true;
       },
@@ -330,4 +330,34 @@ test('missed web push shows who called even with the app closed', async (t) => {
     showNotification: async (...args) => shown.push(args),
   });
   assert.equal(shown[0][0], 'Llamada perdida de María Pérez');
+});
+
+test('group accept and reject use group-specific cold-start routes', async (t) => {
+  const conversationId = 'eb1aaa07-117e-44c4-b0ec-d5d9376ee36d';
+  for (const [action, parameter] of [['accept', 'answerGroupCall'], ['reject', 'rejectGroupCall']]) {
+    const opened = [];
+    await dispatchNotificationClick(t, {
+      matchAll: async () => [],
+      openWindow: async (url) => opened.push(url),
+    }, 'group-call-incoming', action, { conversationId, media: 'video' });
+    assert.deepEqual(opened, [
+      `/chat?${parameter}=${callId}&groupCallConversation=${conversationId}&groupCallMedia=video`,
+    ]);
+  }
+});
+
+test('canceling a group ring closes its notification without displaying another one', async (t) => {
+  let closed = false;
+  await dispatchPush(t, {
+    title: 'Equipo',
+    body: 'Llamada grupal',
+    data: { type: 'group-call-closed', callId },
+  }, {
+    getNotifications: async ({ tag }) => {
+      assert.equal(tag, `messinger:group-call-incoming:${callId}`);
+      return [{ close() { closed = true; } }];
+    },
+    showNotification: () => assert.fail('a closure is silent'),
+  });
+  assert.equal(closed, true);
 });

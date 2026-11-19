@@ -3,6 +3,10 @@ import type { CallView } from '../state/call-session';
 export type CallNotificationPermission = NotificationPermission | 'unsupported';
 
 type NotificationHandle = { close: () => void };
+type CallNotificationView = Pick<
+  CallView, 'callId' | 'participantName' | 'media' | 'incoming' | 'status' | 'answering' | 'expiresAt'
+> & { groupConversationId?: string };
+
 type CallNotificationKind = 'call-incoming' | 'call-missed';
 
 export function getCallNotificationPermission(): CallNotificationPermission {
@@ -13,8 +17,8 @@ export function getCallNotificationPermission(): CallNotificationPermission {
 
 async function showCallNotification(
   kind: CallNotificationKind,
-  call: CallView & { callId: string },
-  onAnswer?: (callId: string) => void,
+  call: CallNotificationView & { callId: string },
+  onAnswer?: (callId: string, call: CallNotificationView) => void,
 ): Promise<NotificationHandle | undefined> {
   if (getCallNotificationPermission() !== 'granted') return;
 
@@ -22,14 +26,21 @@ async function showCallNotification(
   const name = call.participantName?.trim();
   const title = incoming ? (name || 'Llamada entrante') : (name ? `Llamada perdida de ${name}` : 'Llamada perdida');
   const media = call.media === 'video' ? 'videollamada' : 'llamada de voz';
-  const tag = `messinger:${kind}:${call.callId}`;
+  const type = call.groupConversationId ? `group-${kind}` : kind;
+  const tag = `messinger:${type}:${call.callId}`;
   const options: NotificationOptions = {
     body: incoming ? `Tienes una ${media}. Pulsa para atender.` : `No contestaste una ${media}.`,
     icon: `${import.meta.env.BASE_URL}pwa-192x192.png`,
     tag,
     requireInteraction: incoming,
     silent: incoming, // The incoming call already has its own ringtone.
-    data: { type: kind, callId: call.callId },
+    data: {
+      type, callId: call.callId,
+      ...(call.groupConversationId ? {
+        conversationId: call.groupConversationId, media: call.media,
+        groupName: name, expiresAt: call.expiresAt,
+      } : {}),
+    },
   };
 
   try {
@@ -66,7 +77,7 @@ async function showCallNotification(
       event.preventDefault();
       window.focus();
       notification.close();
-      if (incoming) onAnswer?.(call.callId);
+      if (incoming) onAnswer?.(call.callId, call);
     };
     return { close: () => notification.close() };
   } catch {
@@ -76,7 +87,7 @@ async function showCallNotification(
 }
 
 /** Observes call state and manages incoming and missed notifications. */
-export function createCallNotifications(onAnswer?: (callId: string) => void) {
+export function createCallNotifications(onAnswer?: (callId: string, call: CallNotificationView) => void) {
   const incomingShown = new Set<string>();
   const incomingPending = new Set<string>();
   const missedShown = new Set<string>();
@@ -96,7 +107,7 @@ export function createCallNotifications(onAnswer?: (callId: string) => void) {
     }
   }
 
-  function update(call: CallView | null) {
+  function update(call: CallNotificationView | null) {
     if (!active) return;
     const ringing =
       call?.incoming &&

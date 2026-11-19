@@ -13,7 +13,7 @@ import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
 import { MessageAttachment } from '@/components/chat/attachments/message-attachment';
 import { ConversationEventMessage } from '@/components/chat/conversation-event-message';
 
-import type { Message, CallConversationEvent } from '@/types/conversation';
+import type { Message, ConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
   const { user } = useUserContext();
@@ -131,7 +131,7 @@ export function MessageList() {
       );
     });
 
-    function appendCallEvent({ conversationEvent }: { conversationEvent?: CallConversationEvent }) {
+    function appendCallEvent({ conversationEvent }: { conversationEvent?: ConversationEvent }) {
       if (
         !live ||
         !conversationEvent ||
@@ -166,6 +166,8 @@ export function MessageList() {
       );
     });
     const offEnd = wsClient.on('CALL_END', appendCallEvent);
+    const offGroupStarted = wsClient.on('GROUP_CALL_STARTED', appendCallEvent);
+    const offGroupEnded = wsClient.on('GROUP_CALL_ENDED', appendCallEvent);
     const offReject = wsClient.on('CALL_REJECT', appendCallEvent);
 
     return () => {
@@ -173,6 +175,8 @@ export function MessageList() {
       unsubscribeNewMessage();
       unsubscribeSentMessage();
       offEnd();
+      offGroupStarted();
+      offGroupEnded();
       offHistoryDeleted();
       offReject();
     };
@@ -419,6 +423,17 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   }
 
   const isOwn = message.senderId === user?.id;
+  const senderName =
+    activeConversation?.type === 'GROUP'
+      ? activeConversation.members
+          .find((member) => member.userId === message.senderId)
+          ?.username?.trim() ||
+        activeConversation.knownMembers
+          ?.find((member) => member.userId === message.senderId)
+          ?.username?.trim() ||
+        (isOwn ? user?.username?.trim() : undefined) ||
+        'Miembro del grupo'
+      : null;
   const messageId = message.messageId || message.id;
 
   function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
@@ -443,6 +458,9 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
           isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
         ].join(' ')}
       >
+        {senderName && (
+          <p className='mb-1 truncate text-xs font-semibold text-accent'>{senderName}</p>
+        )}
         <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
           {/^https?:\/\/\S+$/.test(message.content.trim()) ? (
             <a

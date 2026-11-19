@@ -14,22 +14,17 @@ export function ChatLayout() {
   });
 
   return (
-    <main className='relative h-dvh overflow-hidden bg-bg-chat text-text-primary'>
+    <main className='relative min-h-screen bg-bg-chat text-text-primary'>
       <div
         className={
-          isDesktop
-            ? 'grid h-full min-h-0 grid-cols-[360px_1fr] xl:grid-cols-[400px_1fr]'
-            : 'h-full'
+          isDesktop ? 'grid h-screen grid-cols-[400px_1fr] overflow-hidden bg-bg-app' : 'h-screen'
         }
       >
         <ConversationList />
         {activeConversation ? (
           <section
             key={activeConversation.id}
-            className={[
-              'flex min-h-0 min-w-0 flex-col overflow-hidden bg-bg-chat',
-              isDesktop ? 'relative h-full' : 'absolute inset-0 z-50',
-            ].join(' ')}
+            className={`flex h-screen min-w-0 flex-col overflow-hidden bg-bg-chat opacity-100 transition-opacity duration-300 starting:opacity-0 ${isDesktop ? '' : 'absolute inset-x-0 top-0 z-50'}`}
           >
             <ChatHeader />
             {activeConversation.invitation ? (
@@ -42,7 +37,7 @@ export function ChatLayout() {
             )}
           </section>
         ) : isDesktop ? (
-          <section className='chat-paper flex min-h-0 flex-col items-center justify-center'>
+          <section className='chat-paper flex flex-col items-center justify-center'>
             <MessagesSquare size={100} className='mb-2 text-accent' />
             <p className='text-3xl text-text-secondary'>
               Selecciona una conversación o envía un mensaje

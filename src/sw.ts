@@ -11,8 +11,6 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 
 self.addEventListener('push', (event) => {
-  console.log('[SW] PUSH RECEIVED', event.data);
-
   if (!event.data) {
     return;
   }
@@ -20,10 +18,8 @@ self.addEventListener('push', (event) => {
   const payload = event.data.json();
   const { title, body, icon, data } = payload;
 
-  console.log('AAAA', data);
-  if (data?.type === 'call-incoming' || data?.type === 'call-missed') {
-    console.log('BBBB');
-
+  if (data?.type === 'call-incoming' || data?.type === 'call-missed' ||
+    data?.type === 'group-call-incoming' || data?.type === 'group-call-missed' || data?.type === 'group-call-closed') {
     event.waitUntil(showCallPushNotification({ title, body, icon, data }));
     return;
   }
@@ -56,6 +52,21 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
   const { type, conversationId, callId } = event.notification.data ?? {};
+
+  if (type === 'group-call-missed') {
+    event.waitUntil(openOrFocusWindow(`/chat?conversationId=${encodeURIComponent(conversationId)}`));
+    return;
+  }
+
+  if (type === 'group-call-incoming') {
+    if (event.action && event.action !== 'accept' && event.action !== 'reject') return;
+    const { media, groupName, expiresAt } = event.notification.data;
+    if (expiresAt && Date.parse(expiresAt) <= Date.now()) return;
+    event.waitUntil(openOrFocusCallWindow(callId, event.action === 'reject' ? 'reject' : 'accept', {
+      conversationId, media, groupName,
+    }));
+    return;
+  }
 
   if (type === 'call-incoming' || type === 'call-missed') {
     const action =
@@ -126,18 +137,28 @@ async function openOrFocusWindow(url: string) {
 }
 
 // Focusing the current chat preserves its selected WebSocket and active peer.
-async function openOrFocusCallWindow(callId?: string, action?: 'accept' | 'reject') {
+type GroupCallRouting = { conversationId: string; media?: 'audio' | 'video'; groupName?: string };
+
+async function openOrFocusCallWindow(callId?: string, action?: 'accept' | 'reject', group?: GroupCallRouting) {
   const validCallId =
     typeof callId === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(callId);
-  const parameter = action === 'reject' ? 'rejectCall' : 'answerCall';
-  const url = validCallId && action ? `/chat?${parameter}=${encodeURIComponent(callId)}` : '/chat';
+  const parameter = group
+    ? (action === 'reject' ? 'rejectGroupCall' : 'answerGroupCall')
+    : (action === 'reject' ? 'rejectCall' : 'answerCall');
+  const route = new URLSearchParams();
+  if (validCallId && action) route.set(parameter, callId);
+  if (validCallId && action && group) {
+    route.set('groupCallConversation', group.conversationId);
+    route.set('groupCallMedia', group.media ?? 'audio');
+  }
+  const url = route.size ? `/chat?${route}` : '/chat';
   const windowClients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
   const chatClients = windowClients.filter((client) => new URL(client.url).pathname === '/chat');
   const chatClient = chatClients.find((client) => client.focused) ?? chatClients[0];
   if (chatClient) {
     if (action !== 'reject') await chatClient.focus();
-    if (!validCallId || !action || (await deliverCallAction(chatClient, callId, action))) return;
+    if (!validCallId || !action || (await deliverCallAction(chatClient, callId, action, group))) return;
     // A tab still loading may not have the listener yet. Preserve it and open a cold-start URL.
   }
   await self.clients.openWindow(url);
@@ -147,6 +168,7 @@ function deliverCallAction(
   client: WindowClient,
   callId: string,
   action: 'accept' | 'reject',
+  group?: GroupCallRouting,
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const channel = new MessageChannel();
@@ -166,7 +188,7 @@ function deliverCallAction(
         finish(true);
     };
     try {
-      client.postMessage({ type: 'CALL_NOTIFICATION_ACTION', callId, action }, [channel.port2]);
+      client.postMessage({ type: group ? 'GROUP_CALL_NOTIFICATION_ACTION' : 'CALL_NOTIFICATION_ACTION', callId, action, ...group }, [channel.port2]);
     } catch {
       finish(false);
     }
@@ -177,21 +199,27 @@ interface CallPushPayload {
   title: string;
   body: string;
   icon?: string;
-  data: { type: 'call-incoming' | 'call-missed'; callId: string; callerName?: string; expiresAt?: string | null };
+  data: {
+    type: 'call-incoming' | 'call-missed' | 'group-call-incoming' | 'group-call-missed' | 'group-call-closed';
+    callId: string; callerName?: string; expiresAt?: string | null;
+  };
 }
 
 async function showCallPushNotification({ title, body, icon, data }: CallPushPayload) {
-  const incoming = data.type === 'call-incoming';
+  const group = data.type.startsWith('group-');
+  const incoming = data.type === 'call-incoming' || data.type === 'group-call-incoming';
+  if (group && incoming && data.expiresAt && Date.parse(data.expiresAt) <= Date.now()) return;
   //if (incoming && data.expiresAt && Date.parse(data.expiresAt) <= Date.now()) return;
 
   if (!incoming) {
     // A missed call replaces its ringing notice, including notices shown by an open tab.
     const ringing = await self.registration
       .getNotifications({
-        tag: `messinger:call-incoming:${data.callId}`,
+        tag: `messinger:${group ? 'group-' : ''}call-incoming:${data.callId}`,
       })
       .catch(() => []);
     for (const notification of ringing) notification.close();
+    if (data.type === 'group-call-closed') return;
   }
 
   const callerName = typeof data.callerName === 'string' ? data.callerName.trim().slice(0, 100) : '';

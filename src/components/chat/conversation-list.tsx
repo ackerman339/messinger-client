@@ -13,7 +13,7 @@ import { wsClient } from '@clients/websocket-client';
 import type {
   Conversation,
   Message,
-  CallConversationEvent,
+  ConversationEvent,
 } from '@/types/conversation';
 
 export function ConversationList() {
@@ -169,6 +169,10 @@ function getLastMessageContent(
       ? 'Videollamada'
       : 'Llamada de voz';
   }
+  if (message?.type === 'GROUP_CALL_STARTED' || message?.type === 'GROUP_CALL_ENDED') {
+    const type = message.metadata?.media === 'video' ? 'Videollamada grupal' : 'Llamada grupal';
+    return message.type === 'GROUP_CALL_STARTED' ? type : `${type} finalizada`;
+  }
   return message?.content ?? '';
 }
 
@@ -268,7 +272,7 @@ function ConversationRow({
     function handleCallEvent({
       conversationEvent,
     }: {
-      conversationEvent?: CallConversationEvent;
+      conversationEvent?: ConversationEvent;
     }) {
       if (
         !conversationEvent ||
@@ -279,6 +283,8 @@ function ConversationRow({
       setLastMessageContent(getLastMessageContent(conversationEvent));
     }
     const unsubscribeCallEnd = wsClient.on('CALL_END', handleCallEvent);
+    const offGroupStarted = wsClient.on('GROUP_CALL_STARTED', handleCallEvent);
+    const offGroupEnded = wsClient.on('GROUP_CALL_ENDED', handleCallEvent);
     const unsubscribeCallReject = wsClient.on(
       'CALL_REJECT',
       handleCallEvent,
@@ -316,6 +322,8 @@ function ConversationRow({
       unsubscribeMessageSent();
       unsubscribeHistoryDeleted();
       unsubscribeCallEnd();
+      offGroupStarted();
+      offGroupEnded();
       unsubscribeCallReject();
     };
   }, [activeConversation, conversation.id]);

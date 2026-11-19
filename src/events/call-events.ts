@@ -1,3 +1,4 @@
+import { hasGroupCall } from '../group-calls/occupancy';
 import { createCallSession } from '../state/call-session';
 import { isTerminal } from '../types/call';
 import { wsClient } from '@/clients/websocket-client';
@@ -36,6 +37,7 @@ export function createCallEventHandlers(
   }
 
   function handleIncoming(data: CallServerPayloads['CALL_INCOMING']) {
+    if (hasGroupCall()) return;
     if (store.terminalIds.has(data.callId)) {
       return;
     }

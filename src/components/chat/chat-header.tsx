@@ -1,3 +1,4 @@
+import { GroupCallButtons } from '@/group-calls/group-call-controls';
 import { HeaderButton } from './header-button';
 import { useLayoutEffect, useState } from 'react';
 import { Avatar } from 'radix-ui';
@@ -108,6 +109,7 @@ export function ChatHeader() {
         {activeConversation.type === 'PRIVATE' && privateConversationMember && (
           <CallButtons participantId={privateConversationMember.userId} />
         )}
+        <GroupCallButtons />
         {!activeConversation.invitation && <HeaderButton key={activeConversation.id} />}
       </div>
     </header>

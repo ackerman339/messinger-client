@@ -29,7 +29,7 @@ function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes);
   return [node, ...nodes(node.props?.children)];
 }
-function fixture(ids, messages) {
+function fixture(ids, messages, activeConversation = { id: 'chat' }) {
   const copied = [],
     deleted = [],
     updates = [];
@@ -58,10 +58,10 @@ function fixture(ids, messages) {
           },
         };
       if (name.includes('user-context'))
-        return { useUserContext: () => ({ user: { id: 'me' } }) };
+        return { useUserContext: () => ({ user: { id: 'me', username: 'Lucía' } }) };
       if (name.includes('chat-context'))
         return {
-          useChatContext: () => ({ activeConversation: { id: 'chat' } }),
+          useChatContext: () => ({ activeConversation }),
         };
       if (name.includes('use-cursor-pagination'))
         return {
@@ -227,4 +227,36 @@ test('received attachments and empty text never open selection', () => {
   );
   assert.deepEqual(f.select('two'), []);
   assert.deepEqual(f.select('four'), []);
+});
+
+test('group bubbles display the current sender name and use known members for older messages', () => {
+  const group = {
+    id: 'chat',
+    type: 'GROUP',
+    members: [{ userId: 'other', username: 'Camila' }],
+    knownMembers: [
+      { userId: 'other', username: 'Nombre anterior' },
+      { userId: 'former', username: 'Andrés' },
+    ],
+  };
+  const { bubble } = fixture([], [], group);
+  for (const [message, name] of [
+    [{ ...received, conversationId: group.id }, 'Camila'],
+    [{ ...received, senderId: 'former', attachments: [{ id: 'file' }] }, 'Andrés'],
+    [own, 'Lucía'],
+  ]) {
+    const tree = bubble({ message, selected: false, onSelect() {} });
+    assert.ok(nodes(tree).some((node) => node.props?.children === name));
+  }
+});
+
+test('private bubbles use the message content without adding a sender label', () => {
+  const { bubble } = fixture([], [], {
+    id: 'chat',
+    type: 'PRIVATE',
+    members: [{ userId: 'other', username: 'Camila' }],
+  });
+  const tree = bubble({ message: received, selected: false, onSelect() {} });
+  assert.ok(nodes(tree).some((node) => node.props?.children === received.content));
+  assert.ok(!nodes(tree).some((node) => node.props?.children === 'Camila'));
 });

@@ -1,3 +1,4 @@
+import { hasGroupCall } from '../group-calls/occupancy';
 import { getCameraSwitchError } from '../rtc/camera-switcher';
 import { createCallSession } from '../state/call-session';
 import type { CallMedia, CallStatus } from '../types/call';
@@ -11,6 +12,7 @@ export function createCallLifecycle(store: CallStore) {
     callerName?: string,
     conversationId?: string,
   ) {
+    if (hasGroupCall()) return;
     const current = store.getSession();
     if (current && !current.closed) {
       return;
@@ -89,6 +91,7 @@ export function createCallLifecycle(store: CallStore) {
   }
 
   function answerFromNotification(callId: string) {
+    if (hasGroupCall()) return;
     respondFromNotification(callId, 'accept');
   }
 
@@ -97,6 +100,7 @@ export function createCallLifecycle(store: CallStore) {
   }
 
   function accept() {
+    if (hasGroupCall()) return;
     const session = store.getSession();
     if (
       session &&
