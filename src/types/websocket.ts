@@ -5,6 +5,7 @@ import { CALL_CLIENT_EVENTS, CALL_SERVER_EVENTS } from './call';
 import type { CallClientPayloads, CallServerPayloads } from './call';
 
 export const WS_CLIENT_EVENTS = {
+  WS_PING: 'WS_PING',
   SEND_PRIVATE_MESSAGE: 'SEND_PRIVATE_MESSAGE',
   SEND_GROUP_MESSAGE: 'SEND_GROUP_MESSAGE',
   MESSAGE_DELIVERED: 'MESSAGE_DELIVERED',
@@ -21,6 +22,9 @@ export const WS_CLIENT_EVENTS = {
 export const WS_SERVER_EVENTS = {
   CALL_HISTORY_DELETED: 'CALL_HISTORY_DELETED',
   MESSAGE_SENT: 'MESSAGE_SENT',
+  WS_AUTHENTICATED: 'WS_AUTHENTICATED',
+  WS_PONG: 'WS_PONG',
+  MESSAGE_RECEIPT_CONFIRMED: 'MESSAGE_RECEIPT_CONFIRMED',
   NEW_MESSAGE: 'NEW_MESSAGE',
   MESSAGE_STATUS_UPDATED: 'MESSAGE_STATUS_UPDATED',
   GROUP_INVITATION_REJECTED: 'GROUP_INVITATION_REJECTED',
@@ -83,12 +87,14 @@ export interface MessageAttachmentDto {
 }
 
 export interface PrivateMessageDto {
+  clientMessageId?: string;
   content: string;
   attachments: MessageAttachmentDto[];
   receiverId: string;
 }
 
 export interface GroupMessageDto {
+  clientMessageId?: string;
   content: string;
   attachments: MessageAttachmentDto[];
   conversationId: string;
@@ -115,6 +121,7 @@ export interface UserPresenceOnlineDto {
 
 // --- Payloads del CLIENTE -> server ---
 export interface WsClientPayloads extends CallClientPayloads {
+  [WS_CLIENT_EVENTS.WS_PING]: null;
   [WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE]: PrivateMessageDto;
   [WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE]: GroupMessageDto;
   [WS_CLIENT_EVENTS.MESSAGE_DELIVERED]: MessageDeliveryDto;
@@ -129,9 +136,13 @@ export interface WsClientPayloads extends CallClientPayloads {
 
 // --- Data real que manda el SERVIDOR ---
 export interface WsServerPayloads extends CallServerPayloads {
+  [WS_SERVER_EVENTS.WS_AUTHENTICATED]: { userId: string };
+  [WS_SERVER_EVENTS.WS_PONG]: null;
+  [WS_SERVER_EVENTS.MESSAGE_RECEIPT_CONFIRMED]: MessageDeliveryDto;
   [WS_SERVER_EVENTS.NEW_MESSAGE]: Message;
   [WS_SERVER_EVENTS.MESSAGE_SENT]: Message;
   [WS_SERVER_EVENTS.MESSAGE_STATUS_UPDATED]: {
+    conversationId: string;
     messageId: string;
     userId: string;
     status: MessageStatus;

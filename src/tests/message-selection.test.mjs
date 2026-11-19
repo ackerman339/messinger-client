@@ -43,12 +43,20 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }) {
     useEffect() {},
     useLayoutEffect() {},
     useCallback: (fn) => fn,
+    useMemo: (fn) => fn(),
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
   };
   const generic = new Proxy({}, { get: (_, key) => key });
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(
     (name) => {
       if (name === 'react') return react;
+      if (name === '@react-navigation/native') return { useIsFocused: () => true };
+      if (name.includes('services/message-sync')) return {
+        messageSync: { getSnapshot: () => ({ pending: [], updates: new Map(), connected: true, connectionEpoch: 1 }) },
+        getDeliveryStatus: () => 'SENT',
+        pendingForConversation: () => [],
+      };
       if (name === 'react/jsx-runtime') return require(name);
       if (name === 'expo-clipboard')
         return {

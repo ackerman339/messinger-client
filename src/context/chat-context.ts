@@ -17,7 +17,7 @@ export type ChatContextValue = {
   handleSendMessage: (
     content: string,
     attachments: FileAttachment[],
-  ) => void;
+  ) => boolean;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;
   getUserByCode: (userCode: string) => Promise<Response>;
@@ -43,7 +43,7 @@ export const ChatContext = createContext<ChatContextValue>({
   hasMoreConversations: false,
   isLoadingAttachment: false,
   emptiedConversation: null,
-  handleSendMessage: () => {},
+  handleSendMessage: () => false,
   handleCurrentConversation: () => {},
   prepareAttachments: async () => [] as FileAttachment[],
   getUserByCode: async () => ({}) as User,

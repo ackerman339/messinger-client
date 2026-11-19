@@ -200,6 +200,8 @@ for (const desktop of [true, false]) {
       MessageComposer = () => null,
       GroupInvitationPanel = () => null;
     const tree = load('components/chat/chat-layout.tsx', {
+      'react': { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() },
+      '@/services/message-sync': { messageSync: { getSnapshot: () => ({ connected: true }) } },
       'react-responsive': { useMediaQuery: () => desktop },
       '@context/chat-context': {
         useChatContext: () => ({
@@ -267,13 +269,14 @@ function transport() {
     }
     close() {}
     receive(type, data, requestId) {
-      this.onmessage({ data: JSON.stringify({ type, data, requestId }) });
+      this.onmessage({ currentTarget: this, data: JSON.stringify({ type, data, requestId }) });
     }
   }
   const original = globalThis.WebSocket;
   globalThis.WebSocket = Socket;
   const wsClient = load('clients/websocket-client.ts', {
     '@services/auth': { authService: {} },
+    '@/services/message-sync': { messageSync: { acknowledge: () => true, disconnected() {} } },
     '@/types/websocket': {
       WS_SERVER_EVENTS: {
         GROUP_INVITATION: 'GROUP_INVITATION',
@@ -287,6 +290,7 @@ function transport() {
     wsClient,
     socket: Socket.instance,
     cleanup: () => {
+      wsClient.disconnect();
       globalThis.WebSocket = original;
     },
   };
@@ -379,7 +383,8 @@ test('the provider adds incoming invitations as pending conversations and remove
     useMemo: (callback) => callback(),
   };
   const { ChatProvider } = load('providers/chat-provider.tsx', {
-    react,
+    react: { ...react, useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() },
+    '@/services/message-sync': { messageSync: { getSnapshot: () => ({ connectionEpoch: 1 }) } },
     'react-router-dom': {
       useSearchParams: () => [new URLSearchParams(), () => {}],
     },

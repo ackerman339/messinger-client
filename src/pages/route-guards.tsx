@@ -5,126 +5,84 @@ import { ServerOff, WifiOff } from 'lucide-react';
 import { httpClient } from '@clients/http-client';
 import { connect, disconnect } from '@clients/websocket-client';
 
-type ServerStatus = 'checking' | 'online' | 'offline';
-
 export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useUserContext();
-
   const [isOnline, setIsOnline] = useState(() => navigator.onLine);
-  const [serverStatus, setServerStatus] = useState<ServerStatus>('checking');
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
 
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
-      connect(import.meta.env.VITE_WEB_SOCKET_URL);
+      if (user) connect(import.meta.env.VITE_WEB_SOCKET_URL);
     };
-
     const handleOffline = () => {
       setIsOnline(false);
-      disconnect();
+      if (user) disconnect();
     };
-
+    if (user && !navigator.onLine) disconnect();
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
-    if (!isOnline) {
-      return;
-    }
-
-    let cancelled = false;
-
-    const checkServer = async () => {
+    if (user || loading || !isOnline) return;
+    const controller = new AbortController();
+    let timer: number | undefined;
+    async function checkServer() {
       try {
         await httpClient.get('/', {
           timeout: 5000,
           validateStatus: () => true,
+          signal: controller.signal,
         });
-
-        if (!cancelled) {
-          setServerStatus('online');
-        }
+        if (!controller.signal.aborted) setServerStatus('online');
       } catch {
-        if (!cancelled) {
-          setServerStatus('offline');
-        }
+        if (controller.signal.aborted) return;
+        setServerStatus('offline');
+        timer = window.setTimeout(checkServer, 5000);
       }
-    };
-
-    checkServer();
-
+    }
+    void checkServer();
     return () => {
-      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timer);
     };
-  }, [isOnline]);
+  }, [user, loading, isOnline]);
 
+  // Keep mounted chat history and composers available during an outage.
+  if (user) return children;
+  if (!isOnline) return <UnavailablePage offline />;
   if (loading || serverStatus === 'checking') {
-    return <RouteLoader />;
+    return (
+      <main className='grid min-h-screen place-items-center bg-bg-chat text-sm text-text-secondary'>
+        <div className='flex flex-col items-center gap-3'>
+          <div className='size-8 animate-spin rounded-full border-2 border-border border-t-accent' />
+          <span>Cargando...</span>
+        </div>
+      </main>
+    );
   }
-
-  if (!isOnline) {
-    return <OfflinePage />;
-  }
-
-  if (serverStatus === 'offline') {
-    return <ServerOfflinePage />;
-  }
-
-  if (!user) {
-    return <Navigate to='/sign-in' replace />;
-  }
-
-  return children;
+  if (serverStatus === 'offline') return <UnavailablePage />;
+  return <Navigate to='/sign-in' replace />;
 }
 
-function RouteLoader() {
-  return (
-    <main className='grid min-h-screen place-items-center bg-bg-chat text-sm text-text-secondary'>
-      <div className='flex flex-col items-center gap-3'>
-        <div className='size-8 animate-spin rounded-full border-2 border-border border-t-accent' />
-
-        <span>Cargando...</span>
-      </div>
-    </main>
-  );
-}
-
-function OfflinePage() {
+function UnavailablePage({ offline = false }: { offline?: boolean }) {
+  const Icon = offline ? WifiOff : ServerOff;
   return (
     <main className='grid min-h-screen place-items-center bg-bg-chat px-6 text-text-secondary'>
       <div className='flex max-w-sm flex-col items-center text-center'>
         <div className='mb-5 flex size-16 items-center justify-center rounded-full bg-bg-bubble-other shadow-sm'>
-          <WifiOff className='size-7 text-text-secondary' strokeWidth={1.8} />
+          <Icon className='size-7 text-text-secondary' strokeWidth={1.8} />
         </div>
-
-        <h1 className='mb-2 text-base font-medium text-text-primary'>Sin conexión a Internet</h1>
-
+        <h1 className='mb-2 text-base font-medium text-text-primary'>
+          {offline ? 'Sin conexión a Internet' : 'Servidor no disponible'}
+        </h1>
         <p className='text-sm leading-5'>
-          No tienes conexión a Internet. Comprueba tu conexión e inténtalo nuevamente.
-        </p>
-      </div>
-    </main>
-  );
-}
-
-function ServerOfflinePage() {
-  return (
-    <main className='grid min-h-screen place-items-center bg-bg-chat px-6 text-text-secondary'>
-      <div className='flex max-w-sm flex-col items-center text-center'>
-        <div className='mb-5 flex size-16 items-center justify-center rounded-full bg-bg-bubble-other shadow-sm'>
-          <ServerOff className='size-7 text-text-secondary' strokeWidth={1.8} />
-        </div>
-
-        <h1 className='mb-2 text-base font-medium text-text-primary'>Servidor no disponible</h1>
-
-        <p className='text-sm leading-5'>
-          No podemos conectarnos al servidor. Inténtalo nuevamente en unos momentos.
+          {offline ? 'Comprueba tu conexión a Internet.' : 'Volveremos a intentar conectar en unos segundos.'}
         </p>
       </div>
     </main>

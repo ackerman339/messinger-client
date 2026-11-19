@@ -1,9 +1,24 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  messageSync,
+  pendingForConversation,
+  getDeliveryStatus,
+  mergeMessageHistory,
+} from '@/services/message-sync';
+import { MessageDeliveryIcon } from './message-delivery-icon';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LoaderCircle } from 'lucide-react';
 import { wsClient } from '@clients/websocket-client';
-import { WS_SERVER_EVENTS } from '@/types/websocket';
+import { MessageStatus, WS_SERVER_EVENTS } from '@/types/websocket';
 import { conversationService } from '@/services/conversation';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
@@ -19,6 +34,7 @@ export function MessageList() {
   const { user } = useUserContext();
   const { activeConversation, isLoadingAttachment, emptiedConversation } = useChatContext();
   const hasConversation = !!activeConversation;
+  const conversationId = activeConversation?.id;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] = useState(false);
@@ -40,21 +56,57 @@ export function MessageList() {
    */
   const isLoadingMoreRef = useRef(false);
 
-  const { items, isLoading, hasMore, loadMore, setItems, refresh } = useCursorPagination<Message>({
-    fetchPage: (cursor) =>
-      activeConversation?.isDeleted
-        ? Promise.resolve({
-            page: [...activeConversation.messages].reverse(),
-            nextCursor: null,
-          })
-        : conversationService.getMessages(activeConversation!.id, {
-            cursor,
-            limit: 20,
-          }),
-    reverse: true,
-    getItemKey: (message) => message.messageId || message.id,
+  const {
+    items: serverMessages,
+    isLoading,
+    hasMore,
+    loadMore,
+    setItems,
+    refresh,
+    reload,
+  } = useCursorPagination<Message>({
+    fetchPage: (cursor) => {
+      if (!activeConversation) return Promise.resolve({ page: [], nextCursor: null });
+      if (activeConversation.isDeleted || (!cursor && !messageSync.getSnapshot().connected)) {
+        return Promise.resolve({
+          page: [...(activeConversation.messages ?? [])].reverse(),
+          nextCursor: null,
+        });
+      }
+      return conversationService.getMessages(activeConversation.id, { cursor, limit: 20 });
+    },
+    mergePage: mergeMessageHistory,
     deps: [activeConversation?.id],
   });
+
+  const { pending, connectionEpoch, updates } = useSyncExternalStore(
+    messageSync.subscribe,
+    messageSync.getSnapshot,
+    messageSync.getServerSnapshot,
+  );
+  const queued = useMemo(
+    () => pendingForConversation(pending, activeConversation, user?.id),
+    [pending, activeConversation, user?.id],
+  );
+  const items = useMemo(() => {
+    const confirmed = new Set(serverMessages.map((message) => message.clientMessageId));
+    return [
+      ...serverMessages,
+      ...queued.filter((message) => !confirmed.has(message.clientMessageId)),
+    ];
+  }, [serverMessages, queued]);
+  const previousConnection = useRef(connectionEpoch);
+
+  useEffect(() => {
+    if (connectionEpoch === previousConnection.current) return;
+    previousConnection.current = connectionEpoch;
+    if (conversationId && !activeConversation?.isDeleted) reload();
+  }, [activeConversation?.isDeleted, connectionEpoch, conversationId, reload]);
+
+  useEffect(() => {
+    if (activeConversation?.isDeleted) return;
+    for (const message of serverMessages) messageSync.receipt(message, MessageStatus.DELIVERED);
+  }, [activeConversation?.isDeleted, serverMessages]);
 
   /**
    * Load the next page of older messages.
@@ -100,6 +152,10 @@ export function MessageList() {
 
     container.scrollTop = container.scrollHeight;
   }, []);
+
+  useLayoutEffect(() => {
+    if (queued.length) scrollToBottom();
+  }, [queued.length, scrollToBottom]);
 
   useLayoutEffect(() => {
     let live = true;
@@ -297,7 +353,7 @@ export function MessageList() {
       }
 
       const message = items.find((item) => (item.messageId || item.id) === messageId);
-      if (!message) return current;
+      if (!message || message.localStatus) return current;
       if (message.senderId !== user?.id && (message.content === '' || message.attachments?.length))
         return current;
       if (current.length > 0) {
@@ -346,7 +402,7 @@ export function MessageList() {
       messagesIds: selectedMessageIds,
     });
 
-    const newItems = items.filter(
+    const newItems = serverMessages.filter(
       (message) => !selectedMessageIds.includes(message.messageId || message.id),
     );
 
@@ -358,7 +414,7 @@ export function MessageList() {
   return (
     <div
       ref={containerRef}
-      className='chat-paper flex h-[calc(100vh-80px-64px)] max-h-[calc(100vh-80px-64px)] flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
+      className='chat-paper flex min-h-0 flex-1 flex-col gap-y-5 overflow-y-auto px-4 pb-5 lg:px-8'
     >
       <div ref={sentinelRef} className='h-1 min-h-1 shrink-0' />
       {hasConversation && items.length === 0 && !isLoading && (
@@ -390,6 +446,13 @@ export function MessageList() {
         <MessageBubble
           key={message.messageId || message.id}
           message={message}
+          status={
+            message.localStatus ??
+            getDeliveryStatus(
+              message.deliveries ?? [],
+              updates.get(message.messageId || message.id),
+            )
+          }
           selected={selectedMessageIds.includes(message.messageId || message.id)}
           onSelect={toggleMessageSelection}
         />
@@ -399,14 +462,49 @@ export function MessageList() {
 }
 
 type MessageBubbleProps = {
+  status: React.ComponentProps<typeof MessageDeliveryIcon>['status'];
   message: Message;
   selected: boolean;
   onSelect: (messageId: string) => void;
 };
 
-function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
+function MessageBubble({ message, status, selected, onSelect }: MessageBubbleProps) {
   const { user } = useUserContext();
   const { activeConversation, conversations } = useChatContext();
+
+  const bubbleRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const bubble = bubbleRef.current;
+    if (
+      !bubble ||
+      !user ||
+      message.senderId === user.id ||
+      message.localStatus ||
+      activeConversation?.isDeleted
+    )
+      return;
+    let visible = false;
+    function markRead() {
+      if (visible && document.visibilityState === 'visible' && document.hasFocus()) {
+        messageSync.receipt(message, MessageStatus.READ);
+      }
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting && entry.intersectionRect.height > 0;
+        markRead();
+      },
+      { threshold: 0.01 },
+    );
+    observer.observe(bubble);
+    document.addEventListener('visibilitychange', markRead);
+    window.addEventListener('focus', markRead);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('visibilitychange', markRead);
+      window.removeEventListener('focus', markRead);
+    };
+  }, [activeConversation?.isDeleted, message, user]);
 
   if (message.type && message.type !== 'MESSAGE') {
     return (
@@ -439,11 +537,12 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
   function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
     event.stopPropagation();
 
-    onSelect(messageId);
+    if (!message.localStatus) onSelect(messageId);
   }
 
   return (
     <article
+      ref={bubbleRef}
       data-selector-id={messageId}
       onClick={handleClick}
       className={[
@@ -485,7 +584,11 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
           >
             {message.attachments.map((attachment) => (
               <li key={attachment.id}>
-                <MessageAttachment attachment={attachment} />
+                {message.localStatus ? (
+                  attachment.fileName
+                ) : (
+                  <MessageAttachment attachment={attachment} />
+                )}
               </li>
             ))}
           </ul>
@@ -498,7 +601,16 @@ function MessageBubble({ message, selected, onSelect }: MessageBubbleProps) {
             })}
           </time>
 
-          {isOwn ? <span className='text-accent'>✓✓</span> : null}
+          {isOwn && <MessageDeliveryIcon status={status} />}
+          {message.localStatus === 'FAILED' && (
+            <button
+              type='button'
+              className='ml-1 underline'
+              onClick={() => messageSync.discard(messageId)}
+            >
+              Quitar
+            </button>
+          )}
         </div>
       </div>
     </article>

@@ -5,6 +5,7 @@ interface UseCursorPaginationParams<TResponse> {
   fetchPage: (cursor: string | null) => Promise<Pagination<TResponse>>;
   reverse?: boolean;
   getItemKey?: (item: TResponse) => string;
+  mergePage?: (previous: TResponse[], page: TResponse[]) => TResponse[];
   deps?: unknown[];
 }
 
@@ -12,6 +13,7 @@ export function useCursorPagination<TItem>({
   fetchPage,
   reverse = false,
   getItemKey,
+  mergePage,
   deps = [],
 }: UseCursorPaginationParams<TItem>) {
   const [items, setItems] = useState<TItem[]>([]);
@@ -24,11 +26,13 @@ export function useCursorPagination<TItem>({
   const loadingRef = useRef(false);
   const requestIdRef = useRef(0);
   const getItemKeyRef = useRef(getItemKey);
+  const mergePageRef = useRef(mergePage);
 
   useEffect(() => {
     fetchPageRef.current = fetchPage;
     getItemKeyRef.current = getItemKey;
-  }, [fetchPage, getItemKey]);
+    mergePageRef.current = mergePage;
+  }, [fetchPage, getItemKey, mergePage]);
 
   const loadPage = useCallback(
     async (cursor: string | null) => {
@@ -52,6 +56,7 @@ export function useCursorPagination<TItem>({
         }
 
         setItems((prev) => {
+          if (mergePageRef.current) return mergePageRef.current(prev, response.page);
           const merged = reverse
             ? [...response.page, ...prev]
             : [...prev, ...response.page];
@@ -126,17 +131,20 @@ export function useCursorPagination<TItem>({
     loadPage(nextCursor);
   }, [hasMore, nextCursor, loadPage]);
 
-  const refresh = useCallback(() => {
+  const refreshPage = useCallback((preserveItems: boolean) => {
     requestIdRef.current += 1;
     loadingRef.current = false;
 
-    setItems([]);
+    if (!preserveItems) setItems([]);
     setNextCursor(null);
     setHasMore(true);
     setError(null);
 
     loadPage(null);
   }, [loadPage]);
+
+  const refresh = useCallback(() => refreshPage(false), [refreshPage]);
+  const reload = useCallback(() => refreshPage(true), [refreshPage]);
 
   return {
     items,
@@ -146,5 +154,6 @@ export function useCursorPagination<TItem>({
     setItems,
     loadMore,
     refresh,
+    reload,
   };
 }

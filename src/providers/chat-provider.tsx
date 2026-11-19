@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { messageSync } from '@/services/message-sync';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { conversationService } from '@services/conversation';
 import { fileService } from '@services/files';
@@ -39,15 +40,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     'id'
   > | null>(null);
 
-  const { items, isLoading, hasMore, loadMore } =
+  const { items, isLoading, hasMore, loadMore, reload } =
     useCursorPagination<Conversation>({
       fetchPage: (cursor) =>
         conversationService.getBootstrap({
           cursor,
           limit: 20,
         }),
+      getItemKey: (conversation) => conversation.id,
       deps: [],
     });
+
+  const connectionEpoch = useSyncExternalStore(
+    messageSync.subscribe,
+    () => messageSync.getSnapshot().connectionEpoch,
+    () => 0,
+  );
+  const previousConnection = useRef(connectionEpoch);
+  useEffect(() => {
+    if (connectionEpoch === previousConnection.current) return;
+    previousConnection.current = connectionEpoch;
+    reload();
+  }, [connectionEpoch, reload]);
 
   /**
    * Merge paginated conversations into the context map.
@@ -279,79 +293,65 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   async function prepareAttachments(files: File[]) {
     setIsLoadingAttachment(true);
-    const mappedFiles = files.map((file) => ({
-      contentType: (file.type ||
-        'application/octet-stream') as UploadContentType,
-      size: file.size,
-      fileName: file.name,
-    }));
+    try {
+      const mappedFiles = files.map((file) => ({
+        contentType: (file.type ||
+          'application/octet-stream') as UploadContentType,
+        size: file.size,
+        fileName: file.name,
+      }));
 
-    const result = await fileService.processUpload({ files: mappedFiles });
-    const uploadItems = result.presignedUrls;
-    const attachments = result.pendingUploads.map((item) => {
-      return {
-        id: item.id,
-        fileName: item.fileName,
-        size: item.size,
-        storageKey: item.storageKey,
-        contentType: item.contentType,
-      };
-    });
+      const result = await fileService.processUpload({ files: mappedFiles });
+      const uploadItems = result.presignedUrls;
+      const attachments = result.pendingUploads.map((item) => {
+        return {
+          id: item.id,
+          fileName: item.fileName,
+          size: item.size,
+          storageKey: item.storageKey,
+          contentType: item.contentType,
+        };
+      });
 
-    await Promise.all(
-      attachments.map(async (item) => {
-        const upload = files.find((file) => file.name === item.fileName);
-        const uploadItem = uploadItems.find(
-          (upload) => upload.key === item.storageKey,
-        );
+      await Promise.all(
+        attachments.map(async (item) => {
+          const upload = files.find((file) => file.name === item.fileName);
+          const uploadItem = uploadItems.find(
+            (upload) => upload.key === item.storageKey,
+          );
 
-        if (!upload || !uploadItem) {
-          throw new Error(`No presigned URL for ${item.fileName}`);
-        }
+          if (!upload || !uploadItem) {
+            throw new Error(`No presigned URL for ${item.fileName}`);
+          }
 
-        await fileService.uploadFile(upload, uploadItem.url);
-      }),
-    );
-    setIsLoadingAttachment(false);
-    return attachments;
+          await fileService.uploadFile(upload, uploadItem.url);
+        }),
+      );
+      return attachments;
+    } finally {
+      setIsLoadingAttachment(false);
+    }
   }
 
-  function handleSendMessage(
-    content: string,
-    attachments: FileAttachment[] = [],
-  ) {
-    const current =
-      activeConversation &&
-      conversationsRef.current.get(activeConversation.id);
-    if (
-      activeConversation?.invitation ||
-      activeConversation?.isDeleted ||
-      current?.isDeleted
-    )
-      return;
-    if (activeConversation && activeConversation.type === 'GROUP') {
-      wsClient.emit(WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE, {
-        content,
-        attachments,
-        conversationId: activeConversation.id,
+  function handleSendMessage(content: string, attachments: FileAttachment[] = []) {
+    const userId = user?.id;
+    const current = activeConversation && conversationsRef.current.get(activeConversation.id);
+    if (!userId || activeConversation?.invitation || activeConversation?.isDeleted || current?.isDeleted) {
+      return false;
+    }
+    if (activeConversation?.type === 'GROUP') {
+      return messageSync.enqueue(userId, {
+        type: WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE,
+        data: { content, attachments, conversationId: activeConversation.id },
       });
-      return;
     }
-
-    const targetReceiverId =
-      receiverId ||
-      activeConversation?.members.filter(
-        (member) => member.userId !== user?.id,
-      )[0].userId;
-
-    if (!targetReceiverId) {
-      return;
-    }
-
-    wsClient.emit(WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE, {
-      content,
-      attachments,
-      receiverId: targetReceiverId,
+    const targetReceiverId = activeConversation
+      ? activeConversation.members.find((member) => member.userId !== userId)?.userId || activeConversation.members[0]?.userId
+      : receiverId;
+    if (!targetReceiverId) return false;
+    return messageSync.enqueue(userId, {
+      type: WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE,
+      data: { content, attachments, receiverId: targetReceiverId },
     });
   }
 

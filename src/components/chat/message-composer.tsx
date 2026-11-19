@@ -21,6 +21,7 @@ export function MessageComposer() {
   } = useChatContext();
 
   const [message, setMessage] = useState('');
+  const [sendError, setSendError] = useState('');
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -41,6 +42,12 @@ export function MessageComposer() {
     setMessage(value);
   }
 
+  function submitMessage(content: string) {
+    const saved = handleSendMessage(content, []);
+    setSendError(saved ? '' : 'No se pudo guardar el mensaje en este dispositivo.');
+    return saved;
+  }
+
   function handleSubmit(event: SubmitEvent) {
     event.preventDefault();
 
@@ -50,7 +57,7 @@ export function MessageComposer() {
       return;
     }
 
-    handleSendMessage(content, []);
+    if (!submitMessage(content)) return;
     setMessage('');
     setEmojiPickerOpen(false);
   }
@@ -62,9 +69,9 @@ export function MessageComposer() {
       return;
     }
 
+    if (!submitMessage(content)) return;
     setMessage('');
     setEmojiPickerOpen(false);
-    handleSendMessage(content, []);
   }
 
   function handleEmojiClick(emojiData: EmojiClickData) {
@@ -99,9 +106,14 @@ export function MessageComposer() {
     try {
       const attachments = await prepareAttachments(files);
 
-      await handleSendMessage('Nuevo archivo', attachments);
+      if (!handleSendMessage('Nuevo archivo', attachments)) {
+        setSendError('No se pudo guardar el mensaje en este dispositivo.');
+        return;
+      }
+      setSendError('');
     } catch (error) {
       console.error('[attachments] failed to send files:', error);
+      setSendError('No se pudo subir el archivo. Inténtalo de nuevo.');
     }
   }
 
@@ -117,6 +129,7 @@ export function MessageComposer() {
 
   return (
     <Tooltip.Provider delayDuration={150}>
+      {sendError && <p role='alert' className='px-3 text-sm text-red-600'>{sendError}</p>}
       <footer className='relative grid min-h-20 max-h-80 shrink-0 grid-cols-[auto_1fr_auto] gap-x-1 border-t border-border bg-bg-app px-2 py-3'>
         {emojiPickerOpen && (
           <div className='absolute bottom-full left-2 z-50 mb-2'>

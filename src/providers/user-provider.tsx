@@ -1,3 +1,4 @@
+import { messageSync } from '@/services/message-sync';
 import { useEffect, useState } from 'react';
 
 import { connect, disconnect } from '@clients/websocket-client';
@@ -58,24 +59,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    let active = true;
     async function bootstrapSession() {
       try {
         const user = await authService.me();
+        if (!active) return;
 
+        messageSync.setAccount(user.id);
         setUser(user);
-        connect(import.meta.env.VITE_WEB_SOCKET_URL);
-        await setupNotifications();
-      } catch (error) {
-        console.log('AAA', error);
-        setUser(null);
+        if (navigator.onLine) connect(import.meta.env.VITE_WEB_SOCKET_URL);
+        void setupNotifications();
+      } catch {
+        if (active) setUser(null);
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     }
 
     bootstrapSession();
 
     return () => {
+      active = false;
+      messageSync.setAccount();
       disconnect();
     };
   }, []);
@@ -85,6 +90,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await removeNotifications();
       await authService.logout();
     } finally {
+      messageSync.setAccount();
       disconnect();
       setUser(null);
     }

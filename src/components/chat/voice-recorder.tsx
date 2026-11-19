@@ -46,8 +46,12 @@ export function VoiceRecorder() {
       type: blob.type,
     });
 
-    const attachments = await prepareAttachments([file]);
-    handleSendMessage('Nota de voz', attachments);
+    try {
+      const attachments = await prepareAttachments([file]);
+      if (!handleSendMessage('Nota de voz', attachments)) throw new Error('No se guardó el mensaje');
+    } catch {
+      window.alert('No se pudo enviar la nota de voz.');
+    }
   }
 
   function handleCancel() {

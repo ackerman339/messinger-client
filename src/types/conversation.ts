@@ -1,3 +1,4 @@
+import type { MessageStatus } from './websocket';
 import type { FileAttachment } from './file';
 
 export type Member = {
@@ -10,6 +11,9 @@ export type Member = {
 };
 
 export type Message = {
+  clientMessageId?: string;
+  deliveries?: { userId: string; status: MessageStatus }[];
+  localStatus?: 'PENDING' | 'FAILED';
   id: string;
   messageId: string;
   conversation: Conversation;

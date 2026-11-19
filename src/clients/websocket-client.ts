@@ -1,3 +1,4 @@
+import { messageSync } from '@/services/message-sync';
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { authService } from '@services/auth';
 import { WS_SERVER_EVENTS } from '@/types/websocket';
@@ -34,6 +35,10 @@ let currentUrl = '';
 
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectAttempts = 0;
+let authenticationTimer: ReturnType<typeof setTimeout> | undefined;
+let heartbeat: ReturnType<typeof setInterval> | undefined;
+let lastPong = 0;
+let authGeneration = 0;
 
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 300;
@@ -59,24 +64,66 @@ function getReconnectDelay(): number {
   return Math.floor(Math.random() * exponentialDelay);
 }
 
-function handleOpen() {
-  console.log('[ws] connected');
+function stopMessageTransport() {
+  clearTimeout(authenticationTimer);
+  clearInterval(heartbeat);
+  messageSync.disconnected();
+}
 
-  /**
-   * Connection successfully established.
-   *
-   * Reset exponential backoff.
-   */
+function replaceSocket(source: WebSocket) {
+  if (source !== socket) return;
+  socket = null;
+  stopMessageTransport();
+  rejectPendingRequests();
+  source.close();
+  scheduleReconnect();
+}
+
+function startMessageTransport(source: WebSocket, userId: string) {
+  clearTimeout(authenticationTimer);
+  clearInterval(heartbeat);
   reconnectAttempts = 0;
+  lastPong = Date.now();
+  heartbeat = setInterval(() => {
+    if (Date.now() - lastPong > 65_000 || !sendFrame(source, { type: 'WS_PING', data: null })) {
+      replaceSocket(source);
+    }
+  }, 25_000);
+  messageSync.authenticated(userId, ({ type, data, id }) =>
+    sendFrame(source, { type, data, requestId: id }),
+  );
+}
+
+function sendFrame(source: WebSocket, frame: object) {
+  if (source !== socket || source.readyState !== WebSocket.OPEN) return false;
+  try {
+    source.send(JSON.stringify(frame));
+    return true;
+  } catch {
+    replaceSocket(source);
+    return false;
+  }
 }
 
 function handleMessage(event: MessageEvent) {
+  const source = event.currentTarget as WebSocket;
+  if (source !== socket) return;
+
   try {
     const { type, data, requestId } = JSON.parse(event.data) as {
       requestId?: string;
       type: ServerEvent;
       data: unknown;
     };
+
+    if (type === WS_SERVER_EVENTS.WS_AUTHENTICATED) {
+      startMessageTransport(source, (data as WsServerPayloads['WS_AUTHENTICATED']).userId);
+      return;
+    }
+    if (type === WS_SERVER_EVENTS.WS_PONG) {
+      lastPong = Date.now();
+      return;
+    }
 
     if (
       requestId &&
@@ -108,15 +155,16 @@ function handleMessage(event: MessageEvent) {
 
       // Guard against the case where the server sends a plain string
       // instead of the expected { success, error } shape (unhandled errors)
-      const message = errorData?.error?.code;
+      const message = errorData?.error?.message;
 
       if (message && AUTH_ERROR_MESSAGES.has(message)) {
         // SESSION_REVOKED means the session was explicitly invalidated
         // (e.g. logout elsewhere) — refresh will fail too, go straight to login
         if (message === 'WS_AUTH:SESSION_REVOKED') {
           disconnect();
+          messageSync.setAccount();
           authService.logout();
-          window.location.href = '/login';
+          window.location.href = '/sign-in';
           return;
         }
 
@@ -126,39 +174,39 @@ function handleMessage(event: MessageEvent) {
       }
     }
 
-    handlers.get(type)?.forEach((handler) => handler(data));
+    if (messageSync.acknowledge(type, data, requestId)) {
+      handlers.get(type)?.forEach((handler) => handler(data));
+    }
   } catch (err) {
     console.error('[ws] invalid message', err);
   }
 }
 
 async function handleAuthError() {
+  if (reconnecting) return;
   reconnecting = true;
-
+  disconnect();
+  const generation = authGeneration;
+  let retry = false;
   try {
-    /**
-     * Close current socket intentionally.
-     *
-     * handleClose() will NOT reconnect because
-     * manualDisconnect is true.
-     */
-    disconnect();
-
-    /**
-     * Refresh the access token.
-     */
     await authService.refresh();
-
-    /**
-     * connect() resets manualDisconnect.
-     */
-    connect(currentUrl);
+    if (generation === authGeneration) connect(currentUrl);
   } catch (error) {
-    console.error('[ws] session refresh failed', error);
-    await authService.logout();
-    window.location.href = '/login';
+    if (generation !== authGeneration) return;
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status !== 400 && status !== 401 && status !== 403) {
+      retry = true;
+      return;
+    }
+    messageSync.setAccount();
+    void authService.logout().catch(() => {});
+    window.location.href = '/sign-in';
   } finally {
     reconnecting = false;
+    if (retry && generation === authGeneration) {
+      manualDisconnect = false;
+      scheduleReconnect();
+    }
   }
 }
 
@@ -199,6 +247,7 @@ function scheduleReconnect() {
 }
 
 function handleClose(event: CloseEvent) {
+  if (event.currentTarget !== socket) return;
   rejectPendingRequests();
   console.log('[ws] CLOSE', {
     code: event.code,
@@ -207,6 +256,7 @@ function handleClose(event: CloseEvent) {
   });
 
   socket = null;
+  stopMessageTransport();
 
   /**
    * Intentional disconnect.
@@ -256,13 +306,16 @@ export function connect(url: string) {
 
   socket = new WebSocket(url);
 
-  socket.onopen = handleOpen;
+  const source = socket;
+  authenticationTimer = setTimeout(() => replaceSocket(source), 20_000);
   socket.onmessage = handleMessage;
   socket.onclose = handleClose;
   socket.onerror = handleError;
 }
 
 export function disconnect() {
+  authGeneration++;
+  stopMessageTransport();
   rejectPendingRequests();
   earlyInvitations.clear();
   console.trace('[ws] DISCONNECT');

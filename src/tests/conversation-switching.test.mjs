@@ -184,6 +184,8 @@ function messages(conversationId) {
     useRef: (current) => ({ current }),
     useState: (initial) => [initial, () => {}],
     useCallback: (fn) => fn,
+    useMemo: (fn) => fn(),
+    useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot(),
     useEffect: (fn) => effects.push(fn),
     useLayoutEffect: (fn) => effects.push(fn),
   };
@@ -192,6 +194,14 @@ function messages(conversationId) {
     : 'components/chat/message-list.tsx';
   const module = load(file, (name) => {
     if (name === 'react') return hooks;
+    if (name === '@react-navigation/native') return { useIsFocused: () => true };
+    if (name.includes('services/message-sync')) return {
+      messageSync: { getSnapshot: () => ({ pending: [], updates: new Map(), connected: true, connectionEpoch: 1 }), receipt() {} },
+      pendingForConversation: () => [],
+    };
+    if (name === 'react-native') return {
+      FlatList: 'FlatList', AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
+    };
     if (name === 'expo-clipboard') return {};
     if (name === 'react-native' || name === 'tamagui')
       return new Proxy({}, { get: (_, key) => key });
@@ -206,6 +216,7 @@ function messages(conversationId) {
       };
     if (name.includes('types/websocket'))
       return {
+        MessageStatus: { DELIVERED: 'DELIVERED', READ: 'READ' },
         WS_SERVER_EVENTS: {
           NEW_MESSAGE: 'NEW_MESSAGE',
           MESSAGE_SENT: 'MESSAGE_SENT',
@@ -311,6 +322,8 @@ for (const desktop of mobile ? [false] : [false, true]) {
           '@/src/calls/componentes/call-panel': component('CallPanel'),
         }
       : {
+          'react': { useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() },
+          '@/services/message-sync': { messageSync: { getSnapshot: () => ({ connected: true }) } },
           'react-responsive': { useMediaQuery: () => desktop },
           '@context/chat-context': {
             useChatContext: () => ({ activeConversation: conversation }),

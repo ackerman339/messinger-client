@@ -75,15 +75,7 @@ export function ConversationList() {
     };
   }, [conversations, handleNewConversation]);
 
-  async function handleSelect(conversationId: string) {
-    handleCurrentConversation(conversationId);
-    if (
-      conversations.get(conversationId)?.invitation ||
-      conversations.get(conversationId)?.isDeleted
-    )
-      return;
-    await conversationService.resetUnreadMessagesCount({ conversationId });
-  }
+  const handleSelect = handleCurrentConversation;
 
   return (
     <Tabs.Root value={activeTab} onValueChange={setActiveTab} asChild>
@@ -226,35 +218,12 @@ function ConversationRow({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(
-      WS_SERVER_EVENTS.NEW_MESSAGE,
-      async (message) => {
-        if (activeConversation) {
-          if (
-            (message.conversation?.id ?? message.conversationId) ===
-            conversation.id
-          ) {
-            if (activeConversation.id !== conversation.id) {
-              setUnreadMessagesCount((prev) => prev + 1);
-            }
-            lastEntryRef.current = message;
-            setLastMessageContent(getLastMessageContent(message));
-            await conversationService.resetUnreadMessagesCount({
-              conversationId: activeConversation.id,
-            });
-          }
-        } else {
-          if (
-            (message.conversation?.id ?? message.conversationId) ===
-            conversation.id
-          ) {
-            setUnreadMessagesCount((prev) => prev + 1);
-            lastEntryRef.current = message;
-            setLastMessageContent(getLastMessageContent(message));
-          }
-        }
-      },
-    );
+    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
+      if ((message.conversation?.id ?? message.conversationId) !== conversation.id) return;
+      if (activeConversation?.id !== conversation.id) setUnreadMessagesCount((previous) => previous + 1);
+      lastEntryRef.current = message;
+      setLastMessageContent(getLastMessageContent(message));
+    });
 
     const unsubscribeMessageSent = wsClient.on(
       WS_SERVER_EVENTS.MESSAGE_SENT,

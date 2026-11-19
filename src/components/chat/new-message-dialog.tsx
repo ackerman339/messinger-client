@@ -1,6 +1,8 @@
+import { messageSync } from '@/services/message-sync';
+import { MessageDeliveryIcon } from './message-delivery-icon';
 import { Dialog } from 'radix-ui';
 import { X } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useChatContext } from '@context/chat-context';
 import { MessageComposer } from './message-composer';
 
@@ -16,6 +18,13 @@ export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) 
   const [userCode, setUserCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const { pending } = useSyncExternalStore(
+    messageSync.subscribe,
+    messageSync.getSnapshot,
+    messageSync.getServerSnapshot,
+  );
+  const outgoing = pending.filter((entry) => 'receiverId' in entry.data && entry.data.receiverId === receiverId);
 
   async function handleContinue() {
     if (!userCode.trim()) return;
@@ -92,7 +101,16 @@ export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) 
               </button>
             </div>
           ) : (
-            <MessageComposer />
+            <>
+              {outgoing.map((message) => (
+                <div key={message.id} className='flex items-center gap-2 px-4 py-1 text-sm'>
+                  <span className='flex-1 truncate'>{message.data.content}</span>
+                  <MessageDeliveryIcon status={message.failed ? 'FAILED' : 'PENDING'} />
+                  {message.failed && <button type='button' className='underline' onClick={() => messageSync.discard(message.id)}>Quitar</button>}
+                </div>
+              ))}
+              <MessageComposer />
+            </>
           )}
         </Dialog.Content>
       </Dialog.Portal>
