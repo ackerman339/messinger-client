@@ -1,3 +1,4 @@
+import type { LocationInput } from '../types/location';
 import { createContext, useContext } from 'react';
 
 import type { Conversation } from '@/types/conversation';
@@ -17,6 +18,7 @@ export type ChatContextValue = {
   handleSendMessage: (
     content: string,
     attachments: FileAttachment[],
+    location?: LocationInput,
   ) => boolean;
   handleCurrentConversation: (conversationId: string) => void;
   prepareAttachments: (files: File[]) => Promise<FileAttachment[]>;

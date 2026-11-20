@@ -1,3 +1,4 @@
+import type { LocationState } from './location';
 import type { MessageStatus } from './websocket';
 import type { FileAttachment } from './file';
 
@@ -13,6 +14,7 @@ export type Member = {
 export type Message = {
   clientMessageId?: string;
   deliveries?: { userId: string; status: MessageStatus }[];
+  location?: LocationState;
   localStatus?: 'PENDING' | 'FAILED';
   id: string;
   messageId: string;

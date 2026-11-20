@@ -1,13 +1,14 @@
 import { useRef } from 'react';
 import { DropdownMenu } from 'radix-ui';
-import { FileText, Image, Paperclip, Plus, Video, FileUp } from 'lucide-react';
+import { FileText, Image, Paperclip, Plus, MapPin, Video, FileUp } from 'lucide-react';
 
 type AttachmentMenuProps = {
   disabled?: boolean;
+  onLocationSelected: () => void;
   onFilesSelected: (files: File[]) => void;
 };
 
-export function AttachmentMenu({ disabled = false, onFilesSelected }: AttachmentMenuProps) {
+export function AttachmentMenu({ disabled = false, onFilesSelected, onLocationSelected }: AttachmentMenuProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -32,8 +33,8 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
             type='button'
             disabled={disabled}
             className='grid size-11 place-items-center rounded-full text-text-secondary transition hover:bg-slate-100 hover:text-text-primary disabled:opacity-40 cursor-pointer'
-            aria-label='enviar archivo'
-            title='Enviar archivo'
+            aria-label='Adjuntos'
+            title='Adjuntos'
           >
             <Plus className='size-5' />
           </button>
@@ -46,6 +47,14 @@ export function AttachmentMenu({ disabled = false, onFilesSelected }: Attachment
             sideOffset={8}
             className='z-50 min-w-52 rounded-xl border border-border bg-bg-app p-1.5 shadow-lg'
           >
+            <DropdownMenu.Item
+              className='flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-none hover:bg-slate-100'
+              onSelect={onLocationSelected}
+            >
+              <MapPin className='size-5' />
+              <span>Ubicación</span>
+            </DropdownMenu.Item>
+
             <DropdownMenu.Item
               className='flex cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm outline-none hover:bg-slate-100'
               onSelect={(event) => {

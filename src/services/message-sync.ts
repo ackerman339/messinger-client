@@ -1,3 +1,6 @@
+import { mergeLocation } from '../types/location';
+import type { LocationState, LocationUpdate } from '../types/location';
+import { createLiveLocationPublisher } from './live-location-publisher';
 import type { Conversation, Message } from '../types/conversation';
 import { MessageStatus, WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '../types/websocket';
 import type {
@@ -5,6 +8,7 @@ import type {
   MessageDeliveryDto,
   PrivateMessageDto,
   WsServerPayloads,
+  WsClientPayloads,
 } from '../types/websocket';
 import { outboxStorage, newMessageId } from './outbox-storage';
 
@@ -24,13 +28,19 @@ type OutgoingMessage = SendMessage & {
 };
 
 type OutgoingReceipt = SendReceipt & { id: string };
-export type OutboxEntry = OutgoingMessage | OutgoingReceipt;
+type OutgoingLocationStop = {
+  type: typeof WS_CLIENT_EVENTS.LOCATION_STOP;
+  id: string;
+  data: WsServerPayloads['LOCATION_STOP_CONFIRMED'];
+};
+export type OutboxEntry = OutgoingMessage | OutgoingReceipt | OutgoingLocationStop;
 type Send = (entry: OutboxEntry) => void;
 type Receipt = NonNullable<Message['deliveries']>[number];
 
 type Snapshot = {
   pending: readonly OutgoingMessage[];
   updates: ReadonlyMap<string, ReadonlyMap<string, MessageStatus>>;
+  locations: ReadonlyMap<string, LocationState>;
   connected: boolean;
   connectionEpoch: number;
 };
@@ -75,7 +85,10 @@ export function mergeMessageHistory(previous: Message[], page: Message[]) {
       const old = deliveries.get(receipt.userId);
       if (!old || rank[receipt.status] > rank[old.status]) deliveries.set(receipt.userId, receipt);
     }
-    byId.set(id, { ...existing, ...message, deliveries: [...deliveries.values()] });
+    const location = message.location
+      ? mergeLocation(existing.location, message.location)
+      : existing.location;
+    byId.set(id, { ...existing, ...message, location, deliveries: [...deliveries.values()] });
   }
   return [...byId.values()].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
 }
@@ -116,6 +129,7 @@ export function pendingForConversation(
       senderId: userId,
       content: entry.data.content,
       attachments: entry.data.attachments,
+      location: entry.data.location,
       createdAt: entry.createdAt,
       type: 'MESSAGE',
       localStatus: entry.failed ? 'FAILED' : 'PENDING',
@@ -129,10 +143,12 @@ function createMessageSync() {
   const initialSnapshot: Snapshot = {
     pending: [],
     updates: new Map(),
+    locations: new Map(),
     connected: false,
     connectionEpoch: 0,
   };
   let snapshot = initialSnapshot;
+  const publisher = createLiveLocationPublisher();
   const listeners = new Set<() => void>();
   const entries = new Map<string, OutboxEntry>();
   const incoming = new Set<string>();
@@ -163,7 +179,7 @@ function createMessageSync() {
   function flush() {
     if (!account || account !== authenticatedUser || !send) return;
     let nextMessage: OutgoingMessage | undefined;
-    let nextReceipt: OutgoingReceipt | undefined;
+    let nextReceipt: OutgoingReceipt | OutgoingLocationStop | undefined;
     for (const entry of entries.values()) {
       if (isMessage(entry)) {
         if (!entry.failed && !nextMessage) nextMessage = entry;
@@ -192,6 +208,7 @@ function createMessageSync() {
     if (account === userId) return;
     clearLane(messageLane);
     clearLane(receiptLane);
+    publisher.clear();
     account = userId;
     entries.clear();
     received.clear();
@@ -210,21 +227,28 @@ function createMessageSync() {
     publish({
       pending: [...entries.values()].filter(isMessage),
       updates: new Map(),
+      locations: new Map(),
       connected: !!account && account === authenticatedUser,
     });
     flush();
   }
 
-  function authenticated(userId: string, transport: Send) {
+  function authenticated(
+    userId: string,
+    transport: Send,
+    publishLocation?: (data: WsClientPayloads['LOCATION_UPDATE']) => boolean,
+  ) {
     authenticatedUser = userId;
     send = transport;
     if (userId === account) {
+      publisher.connect(publishLocation);
       publish({ connected: true, connectionEpoch: snapshot.connectionEpoch + 1 });
       flush();
     }
   }
 
   function disconnected() {
+    publisher.connect();
     authenticatedUser = undefined;
     send = undefined;
     clearLane(messageLane);
@@ -318,8 +342,48 @@ function createMessageSync() {
     flush();
   }
 
+  function updateLocation({ messageId, location }: LocationUpdate) {
+    if (location.stoppedAt) publisher.stop(messageId);
+    const previous = snapshot.locations.get(messageId);
+    const next = mergeLocation(previous, location);
+    if (previous === next) return;
+    const locations = new Map(snapshot.locations);
+    if (locations.size >= 4000 && !locations.has(messageId))
+      locations.delete(locations.keys().next().value!);
+    locations.set(messageId, next);
+    publish({ locations });
+  }
+
+  function stopLocation(message: Message) {
+    const messageId = message.messageId || message.id;
+    const location = snapshot.locations.get(messageId) ?? message.location;
+    if (!account || message.senderId !== account || !location?.expiresAt || location.stoppedAt)
+      return false;
+    if (message.localStatus) {
+      discard(messageId);
+      return true;
+    }
+    const id = `${messageId}-location-stop`;
+    const entry: OutgoingLocationStop = {
+      id,
+      type: WS_CLIENT_EVENTS.LOCATION_STOP,
+      data: { messageId },
+    };
+    try {
+      outboxStorage.save(account, entry);
+    } catch (error) {
+      console.error('[messages] no se pudo guardar el fin de la ubicación', error);
+      return false;
+    }
+    entries.set(id, entry);
+    updateLocation({ messageId, location: { ...location, stoppedAt: Date.now() } });
+    flush();
+    return true;
+  }
+
   function acknowledge(type: string, data: unknown, requestId?: string) {
     if (!account || account !== authenticatedUser) return true;
+    if (type === WS_SERVER_EVENTS.LOCATION_UPDATED) updateLocation(data as LocationUpdate);
     if (type === WS_SERVER_EVENTS.NEW_MESSAGE) {
       const message = data as Message;
       const messageId = message.messageId || message.id;
@@ -344,17 +408,35 @@ function createMessageSync() {
     }
     if (type === WS_SERVER_EVENTS.MESSAGE_SENT) {
       const message = data as Message;
-      if (message.senderId === account && message.clientMessageId) discard(message.clientMessageId);
+      if (message.senderId === account && message.clientMessageId) {
+        if (message.location && entries.has(message.clientMessageId)) {
+          const messageId = message.messageId || message.id;
+          const location = mergeLocation(snapshot.locations.get(messageId), message.location);
+          publisher.begin(messageId, location);
+        }
+        discard(message.clientMessageId);
+      }
     }
     if (!requestId) return true;
+    const errorCode =
+      type === WS_SERVER_EVENTS.ERROR
+        ? (data as WsServerPayloads['ERROR'])?.error?.code
+        : undefined;
+    if (
+      requestId.startsWith('location-update:') &&
+      (errorCode === 'FORBIDDEN' || errorCode === 'NOT_FOUND')
+    ) {
+      publisher.stop(requestId.slice('location-update:'.length));
+    }
     const entry = entries.get(requestId);
     if (!entry) return true;
-    if (type === WS_SERVER_EVENTS.MESSAGE_RECEIPT_CONFIRMED && !isMessage(entry))
-      discard(requestId);
     if (
-      type === WS_SERVER_EVENTS.ERROR &&
-      permanentErrors.has((data as WsServerPayloads['ERROR'])?.error?.code)
-    ) {
+      (type === WS_SERVER_EVENTS.MESSAGE_RECEIPT_CONFIRMED && !isMessage(entry)) ||
+      (type === WS_SERVER_EVENTS.LOCATION_STOP_CONFIRMED &&
+        entry.type === WS_CLIENT_EVENTS.LOCATION_STOP)
+    )
+      discard(requestId);
+    if (type === WS_SERVER_EVENTS.ERROR && errorCode && permanentErrors.has(errorCode)) {
       if (isMessage(entry)) {
         const failed = { ...entry, failed: true } as OutgoingMessage;
         try {
@@ -381,6 +463,8 @@ function createMessageSync() {
     acknowledge,
     receipt,
     discard,
+    stopLocation,
+    cancelLocationTracking: publisher.stop,
     subscribe(listener: () => void) {
       listeners.add(listener);
       return () => {

@@ -53,7 +53,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }) {
       if (name === 'react') return react;
       if (name === '@react-navigation/native') return { useIsFocused: () => true };
       if (name.includes('services/message-sync')) return {
-        messageSync: { getSnapshot: () => ({ pending: [], updates: new Map(), connected: true, connectionEpoch: 1 }) },
+        messageSync: { getSnapshot: () => ({ pending: [], updates: new Map(), connected: true, connectionEpoch: 1 }), cancelLocationTracking() {} },
         getDeliveryStatus: () => 'SENT',
         pendingForConversation: () => [],
       };

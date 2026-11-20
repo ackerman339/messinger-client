@@ -1,3 +1,6 @@
+import { LocationContent } from './location-content';
+import { mergeLocation } from '@/types/location';
+import type { LocationState } from '@/types/location';
 import {
   messageSync,
   pendingForConversation,
@@ -79,7 +82,7 @@ export function MessageList() {
     deps: [activeConversation?.id],
   });
 
-  const { pending, connectionEpoch, updates } = useSyncExternalStore(
+  const { pending, connectionEpoch, updates, locations } = useSyncExternalStore(
     messageSync.subscribe,
     messageSync.getSnapshot,
     messageSync.getServerSnapshot,
@@ -402,6 +405,7 @@ export function MessageList() {
       messagesIds: selectedMessageIds,
     });
 
+    selectedMessageIds.forEach((id) => messageSync.cancelLocationTracking(id));
     const newItems = serverMessages.filter(
       (message) => !selectedMessageIds.includes(message.messageId || message.id),
     );
@@ -446,6 +450,7 @@ export function MessageList() {
         <MessageBubble
           key={message.messageId || message.id}
           message={message}
+          locationUpdate={locations?.get(message.messageId || message.id)}
           status={
             message.localStatus ??
             getDeliveryStatus(
@@ -462,13 +467,14 @@ export function MessageList() {
 }
 
 type MessageBubbleProps = {
+  locationUpdate?: LocationState;
   status: React.ComponentProps<typeof MessageDeliveryIcon>['status'];
   message: Message;
   selected: boolean;
   onSelect: (messageId: string) => void;
 };
 
-function MessageBubble({ message, status, selected, onSelect }: MessageBubbleProps) {
+function MessageBubble({ message, status, selected, onSelect, locationUpdate }: MessageBubbleProps) {
   const { user } = useUserContext();
   const { activeConversation, conversations } = useChatContext();
 
@@ -533,6 +539,13 @@ function MessageBubble({ message, status, selected, onSelect }: MessageBubblePro
         'Miembro del grupo'
       : null;
   const messageId = message.messageId || message.id;
+  const location = locationUpdate ? mergeLocation(message.location, locationUpdate) : message.location;
+
+  function stopLocation() {
+    if (messageSync.stopLocation(message)) return;
+    window.alert('No se pudo guardar el cambio.');
+  }
+
 
   function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
     event.stopPropagation();
@@ -560,20 +573,28 @@ function MessageBubble({ message, status, selected, onSelect }: MessageBubblePro
         {senderName && (
           <p className='mb-1 truncate text-xs font-semibold text-accent'>{senderName}</p>
         )}
-        <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
-          {/^https?:\/\/\S+$/.test(message.content.trim()) ? (
-            <a
-              href={message.content.trim()}
-              target='_blank'
-              rel='noopener noreferrer'
-              className='text-primary underline hover:opacity-80'
-            >
-              {message.content}
-            </a>
-          ) : (
-            message.content
-          )}
-        </p>
+        {location ? (
+          <LocationContent
+            location={location}
+            pending={message.localStatus === 'PENDING'}
+            onStop={isOwn && !activeConversation?.isDeleted && message.localStatus !== 'FAILED' ? stopLocation : undefined}
+          />
+        ) : (
+          <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
+            {/^https?:\/\/\S+$/.test(message.content.trim()) ? (
+              <a
+                href={message.content.trim()}
+                target='_blank'
+                rel='noopener noreferrer'
+                className='text-primary underline hover:opacity-80'
+              >
+                {message.content}
+              </a>
+            ) : (
+              message.content
+            )}
+          </p>
+        )}
 
         {message.attachments?.length > 0 && (
           <ul

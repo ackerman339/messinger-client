@@ -124,3 +124,62 @@ test('a late notification cannot regress a receipt and group status reflects eve
   update('bob', 'READ');
   assert.equal(current(), 'READ');
 });
+
+test('an offline location keeps the confirmed point and starts live updates only after MESSAGE_SENT', (t) => {
+  t.mock.timers.enable({ apis: ['Date', 'setTimeout'], now: 1_800_000_000_000 });
+  const { messageSync, frames } = fixture(t);
+  const account = 'sender';
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, 'geolocation');
+  let watch;
+  let stopped = false;
+  Object.defineProperty(navigator, 'geolocation', {
+    configurable: true,
+    value: {
+      watchPosition(callback) { watch = callback; return 1; },
+      clearWatch() { stopped = true; },
+    },
+  });
+  t.after(() => {
+    messageSync.setAccount();
+    if (descriptor) Object.defineProperty(navigator, 'geolocation', descriptor);
+    else delete navigator.geolocation;
+  });
+  const location = { latitude: 4.6, longitude: -74.07, capturedAt: Date.now(), expiresAt: Date.now() + 900_000 };
+  messageSync.setAccount(account);
+  assert.equal(messageSync.enqueue(account, {
+    ...privateMessage,
+    data: { ...privateMessage.data, location },
+  }), true);
+  assert.equal(watch, undefined);
+
+  const locations = [];
+  const connect = () => messageSync.authenticated(account, (frame) => frames.push(frame), (update) => {
+    locations.push(update);
+    return true;
+  });
+  connect();
+  const queuedId = frames[0].id;
+  assert.deepEqual(frames[0].data.location, location);
+  assert.equal(watch, undefined);
+  const message = { id: 'live-id', clientMessageId: queuedId, senderId: account, location };
+  messageSync.acknowledge('MESSAGE_SENT', message);
+  assert.equal(typeof watch, 'function');
+
+  messageSync.disconnected();
+  t.mock.timers.tick(1000);
+  watch({ coords: { latitude: 4.601, longitude: -74.07 }, timestamp: Date.now() });
+  t.mock.timers.tick(1000);
+  watch({ coords: { latitude: 4.602, longitude: -74.07 }, timestamp: Date.now() });
+  assert.equal(locations.length, 0);
+  connect();
+  assert.equal(locations.length, 1);
+  assert.equal(locations[0].point.latitude, 4.602);
+
+  messageSync.disconnected();
+  assert.equal(messageSync.stopLocation(message), true);
+  assert.equal(stopped, true);
+  assert.ok(messageSync.getSnapshot().locations.get(message.id).stoppedAt);
+  connect();
+  assert.equal(frames.at(-1).type, 'LOCATION_STOP');
+  messageSync.acknowledge('LOCATION_STOP_CONFIRMED', { messageId: message.id }, frames.at(-1).id);
+});

@@ -1,3 +1,4 @@
+import { LocationCompose } from './location-compose';
 import { useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'radix-ui';
 import { ChevronRight, Smile } from 'lucide-react';
@@ -22,6 +23,7 @@ export function MessageComposer() {
 
   const [message, setMessage] = useState('');
   const [sendError, setSendError] = useState('');
+  const [locationOpen, setLocationOpen] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -129,6 +131,17 @@ export function MessageComposer() {
 
   return (
     <Tooltip.Provider delayDuration={150}>
+      {locationOpen && (
+        <LocationCompose
+          onClose={() => setLocationOpen(false)}
+          onSend={(location) => {
+            const content = location.expiresAt ? 'Ubicación en tiempo real' : 'Ubicación compartida';
+            const saved = handleSendMessage(content, [], location);
+            if (saved) setLocationOpen(false);
+            return saved;
+          }}
+        />
+      )}
       {sendError && <p role='alert' className='px-3 text-sm text-red-600'>{sendError}</p>}
       <footer className='relative grid min-h-20 max-h-80 shrink-0 grid-cols-[auto_1fr_auto] gap-x-1 border-t border-border bg-bg-app px-2 py-3'>
         {emojiPickerOpen && (
@@ -146,6 +159,7 @@ export function MessageComposer() {
           <AttachmentMenu
             disabled={disabled || isLoadingAttachment}
             onFilesSelected={uploadFiles}
+            onLocationSelected={() => setLocationOpen(true)}
           />
 
           <ComposerButton

@@ -154,8 +154,9 @@ export function ConversationList() {
 }
 
 function getLastMessageContent(
-  message?: Pick<Message, 'type' | 'metadata'> & { content?: string },
+  message?: Pick<Message, 'type' | 'metadata' | 'location'> & { content?: string },
 ) {
+  if (message?.location) return 'Ubicación';
   if (message?.type === 'CALL_ACCEPTED' || message?.type === 'CALL_END') {
     return message.metadata?.media === 'video'
       ? 'Videollamada'

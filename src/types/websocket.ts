@@ -1,3 +1,4 @@
+import type { LocationInput, LocationPoint, LocationUpdate } from './location';
 import type { GroupCallNotice } from '../group-calls/types';
 import type { Message } from './conversation';
 import { CALL_CLIENT_EVENTS, CALL_SERVER_EVENTS } from './call';
@@ -10,6 +11,8 @@ export const WS_CLIENT_EVENTS = {
   SEND_GROUP_MESSAGE: 'SEND_GROUP_MESSAGE',
   MESSAGE_DELIVERED: 'MESSAGE_DELIVERED',
   MESSAGE_READ: 'MESSAGE_READ',
+  LOCATION_UPDATE: 'LOCATION_UPDATE',
+  LOCATION_STOP: 'LOCATION_STOP',
   GROUP_INVITE_MEMBER: 'GROUP_INVITE_MEMBER',
   GROUP_INVITATION_ACCEPT: 'GROUP_INVITATION_ACCEPT',
   GROUP_INVITATION_REJECT: 'GROUP_INVITATION_REJECT',
@@ -27,6 +30,8 @@ export const WS_SERVER_EVENTS = {
   MESSAGE_RECEIPT_CONFIRMED: 'MESSAGE_RECEIPT_CONFIRMED',
   NEW_MESSAGE: 'NEW_MESSAGE',
   MESSAGE_STATUS_UPDATED: 'MESSAGE_STATUS_UPDATED',
+  LOCATION_UPDATED: 'LOCATION_UPDATED',
+  LOCATION_STOP_CONFIRMED: 'LOCATION_STOP_CONFIRMED',
   GROUP_INVITATION_REJECTED: 'GROUP_INVITATION_REJECTED',
   GROUP_ACTION_CONFIRMED: 'GROUP_ACTION_CONFIRMED',
   GROUP_INVITATION: 'GROUP_INVITATION',
@@ -47,6 +52,11 @@ export const WS_SERVER_EVENTS = {
 } as const;
 
 export type WsErrorCode =
+  | 'BAD_REQUEST'
+  | 'VALIDATION_ERROR'
+  | 'FORBIDDEN'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
   // Auth (thrown by authenticateWsConnection)
   | 'WS_AUTH:INVALID_ACCESS_TOKEN'
   | 'WS_AUTH:INVALID_SESSION'
@@ -88,6 +98,7 @@ export interface MessageAttachmentDto {
 
 export interface PrivateMessageDto {
   clientMessageId?: string;
+  location?: LocationInput;
   content: string;
   attachments: MessageAttachmentDto[];
   receiverId: string;
@@ -95,6 +106,7 @@ export interface PrivateMessageDto {
 
 export interface GroupMessageDto {
   clientMessageId?: string;
+  location?: LocationInput;
   content: string;
   attachments: MessageAttachmentDto[];
   conversationId: string;
@@ -122,6 +134,8 @@ export interface UserPresenceOnlineDto {
 // --- Payloads del CLIENTE -> server ---
 export interface WsClientPayloads extends CallClientPayloads {
   [WS_CLIENT_EVENTS.WS_PING]: null;
+  [WS_CLIENT_EVENTS.LOCATION_UPDATE]: { messageId: string; point: LocationPoint };
+  [WS_CLIENT_EVENTS.LOCATION_STOP]: { messageId: string };
   [WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE]: PrivateMessageDto;
   [WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE]: GroupMessageDto;
   [WS_CLIENT_EVENTS.MESSAGE_DELIVERED]: MessageDeliveryDto;
@@ -138,6 +152,8 @@ export interface WsClientPayloads extends CallClientPayloads {
 export interface WsServerPayloads extends CallServerPayloads {
   [WS_SERVER_EVENTS.WS_AUTHENTICATED]: { userId: string };
   [WS_SERVER_EVENTS.WS_PONG]: null;
+  [WS_SERVER_EVENTS.LOCATION_UPDATED]: LocationUpdate;
+  [WS_SERVER_EVENTS.LOCATION_STOP_CONFIRMED]: { messageId: string };
   [WS_SERVER_EVENTS.MESSAGE_RECEIPT_CONFIRMED]: MessageDeliveryDto;
   [WS_SERVER_EVENTS.NEW_MESSAGE]: Message;
   [WS_SERVER_EVENTS.MESSAGE_SENT]: Message;
