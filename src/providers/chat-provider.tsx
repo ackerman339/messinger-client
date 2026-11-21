@@ -1,3 +1,4 @@
+import { createReplyPreview } from '@/services/message-actions';
 import type { LocationInput } from '../types/location';
 import { messageSync } from '@/services/message-sync';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -19,7 +20,7 @@ import { offlineListKey } from '@/services/offline-session';
 import { updateConversationForMessage } from '@/services/conversation-list-state';
 
 import type { ReactNode } from 'react';
-import type { Conversation } from '../types/conversation';
+import type { Conversation, Message, MessageReply } from '../types/conversation';
 import type { FileAttachment, UploadContentType } from '../types/file';
 
 const conversationKey = (conversation: Conversation) => conversation.id;
@@ -32,6 +33,7 @@ const mergeConversation = (server: Conversation, previous?: Conversation) =>
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const { user, canSync } = useUserContext();
+  const replyUserId = user?.id;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get('conversationId');
@@ -66,6 +68,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     Conversation,
     'id'
   > | null>(null);
+  const [replyDraft, setReplyDraft] = useState<{
+    conversationId: string;
+    userId: string;
+    reply: MessageReply;
+  } | null>(null);
 
   useEffect(() => {
     if (!conversationId) {
@@ -222,11 +229,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   function unSetCurrentConversation() {
+    setReplyDraft(null);
     activeIdRef.current = '';
     setActiveConversationId('');
   }
 
   function handleCurrentConversation(conversationId: string) {
+    if (activeIdRef.current !== conversationId) setReplyDraft(null);
     activeIdRef.current = conversationId;
     setActiveConversationId(conversationId);
     const conversation = conversationsRef.current.get(conversationId);
@@ -292,8 +301,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       });
 
       await Promise.all(
-        attachments.map(async (item) => {
-          const upload = files.find((file) => file.name === item.fileName);
+        attachments.map(async (item, index) => {
+          const upload = files[index];
           const uploadItem = uploadItems.find(
             (upload) => upload.key === item.storageKey,
           );
@@ -311,29 +320,53 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const replyTarget = replyDraft && replyDraft.conversationId === activeConversation?.id &&
+    replyDraft.userId === user?.id && !activeConversation.isDeleted ? replyDraft.reply : null;
+
+  const setReplyTarget = useCallback((message: Message | null) => {
+    if (!message) {
+      setReplyDraft(null);
+      return;
+    }
+    if (!activeConversation || activeConversation.isDeleted || !replyUserId) return;
+    setReplyDraft({
+      conversationId: activeConversation.id,
+      userId: replyUserId,
+      reply: createReplyPreview(message),
+    });
+  }, [activeConversation, replyUserId]);
+
   function handleSendMessage(content: string, attachments: FileAttachment[] = [], location?: LocationInput) {
     const userId = user?.id;
     const current = activeConversation && conversationsRef.current.get(activeConversation.id);
     if (!userId || activeConversation?.invitation || activeConversation?.isDeleted || current?.isDeleted) {
       return false;
     }
+    const data = { content, attachments, location, replyToMessageId: replyTarget?.messageId };
+    const finish = (saved: boolean) => {
+      if (saved && replyTarget) {
+        setReplyDraft((current) => current?.reply === replyTarget ? null : current);
+      }
+      return saved;
+    };
     if (activeConversation?.type === 'GROUP') {
-      return messageSync.enqueue(userId, {
+      return finish(messageSync.enqueue(userId, {
         type: WS_CLIENT_EVENTS.SEND_GROUP_MESSAGE,
-        data: { content, attachments, location, conversationId: activeConversation.id },
-      });
+        data: { ...data, conversationId: activeConversation.id },
+      }, replyTarget ?? undefined));
     }
     const targetReceiverId = activeConversation
       ? activeConversation.members.find((member) => member.userId !== userId)?.userId || activeConversation.members[0]?.userId
       : receiverId;
     if (!targetReceiverId) return false;
-    return messageSync.enqueue(userId, {
+    return finish(messageSync.enqueue(userId, {
       type: WS_CLIENT_EVENTS.SEND_PRIVATE_MESSAGE,
-      data: { content, attachments, location, receiverId: targetReceiverId },
-    });
+      data: { ...data, receiverId: targetReceiverId },
+    }, replyTarget ?? undefined));
   }
 
   function handleEmptyChat(conversationId: string) {
+    setReplyDraft((current) => current?.conversationId === conversationId ? null : current);
     setConversations((previous) => {
       const conversation = previous.get(conversationId);
       if (!conversation) return previous;
@@ -365,6 +398,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         hasMoreConversations: hasMore,
         isLoadingAttachment,
         emptiedConversation,
+        replyTarget,
+        setReplyTarget,
         handleSendMessage,
         handleCurrentConversation,
         prepareAttachments,

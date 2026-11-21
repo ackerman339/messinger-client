@@ -30,6 +30,7 @@ function nodes(node) {
   return [node, ...nodes(node.props?.children)];
 }
 function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = new Map()) {
+  const replies = [];
   const copied = [],
     deleted = [],
     updates = [];
@@ -70,7 +71,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
       if (name.includes('contacts-context')) return { useContactsContext: () => ({ contacts }) };
       if (name.includes('chat-context'))
         return {
-          useChatContext: () => ({ activeConversation }),
+          useChatContext: () => ({ activeConversation, setReplyTarget: (message) => replies.push(message) }),
         };
       if (name.includes('use-cursor-pagination'))
         return {
@@ -100,6 +101,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
   )?.props;
   return {
     bar,
+    replies,
     copied,
     deleted,
     updates,
@@ -198,19 +200,22 @@ test('received message press enables selection', () => {
 const anotherOwn = { ...own, id: 'three', messageId: 'three' };
 const anotherReceived = { ...received, id: 'four', messageId: 'four' };
 const selectionMessages = [own, received, anotherOwn, anotherReceived];
-test('a received message locks out any additional selection until deselected', () => {
+test('received and own messages can be selected together for forwarding', () => {
   const f = fixture(['two'], selectionMessages);
-  assert.deepEqual(f.select('one'), ['two']);
-  assert.deepEqual(f.select('four'), ['two']);
+  assert.deepEqual(f.select('one'), ['two', 'one']);
+  assert.deepEqual(f.select('four'), ['two', 'four']);
   assert.deepEqual(f.select('two'), []);
+  assert.equal(typeof f.bar.onForward, 'function');
+  assert.equal(f.bar.canDelete, false);
 });
-test('own messages allow multiple selection but never include received messages', () => {
+test('multiple own messages remain deletable, but mixed selections cannot be deleted', () => {
   const single = fixture(['one'], selectionMessages);
   assert.deepEqual(single.select('three'), ['one', 'three']);
-  assert.deepEqual(single.select('two'), ['one']);
+  assert.deepEqual(single.select('two'), ['one', 'two']);
   const multiple = fixture(['one', 'three'], selectionMessages);
-  assert.deepEqual(multiple.select('two'), ['one', 'three']);
+  assert.equal(multiple.bar.canDelete, true);
   assert.deepEqual(multiple.select('one'), ['three']);
+  assert.equal(fixture(['one', 'two'], selectionMessages).bar.canDelete, false);
 });
 test('an empty selection accepts either an own or received message', () => {
   const f = fixture([], selectionMessages);
@@ -226,7 +231,7 @@ test('messages with attachments cannot be copied even when they contain a captio
   await f.bar.onCopy();
   assert.deepEqual(f.copied, []);
 });
-test('received attachments and empty text never open selection', () => {
+test('received attachments and empty text can be selected for forwarding', () => {
   const f = fixture(
     [],
     [
@@ -234,8 +239,8 @@ test('received attachments and empty text never open selection', () => {
       { ...anotherReceived, content: '' },
     ],
   );
-  assert.deepEqual(f.select('two'), []);
-  assert.deepEqual(f.select('four'), []);
+  assert.deepEqual(f.select('two'), ['two']);
+  assert.deepEqual(f.select('four'), ['four']);
 });
 
 test('group bubbles display the current sender name and use known members for older messages', () => {
@@ -284,4 +289,12 @@ test('private bubbles use the message content without adding a sender label', ()
   const tree = bubble({ message: received, selected: false, onSelect() {} });
   assert.ok(nodes(tree).some((node) => node.props?.children === received.content));
   assert.ok(!nodes(tree).some((node) => node.props?.children === 'Camila'));
+});
+
+test('the web selection bar replies to a single confirmed message', () => {
+  const f = fixture(['two'], selectionMessages);
+  f.bar.onReply();
+  assert.equal(f.replies[0].id, 'two');
+  assert.deepEqual(f.updates.at(-1), []);
+  assert.equal(fixture(['one', 'two'], selectionMessages).bar.onReply, undefined);
 });

@@ -1,4 +1,4 @@
-import { Copy, Trash2, X } from 'lucide-react';
+import { Copy, Forward, Trash2, X, Reply } from 'lucide-react';
 
 type MessageSelectionBarProps = {
   count: number;
@@ -6,6 +6,8 @@ type MessageSelectionBarProps = {
   canCopy: boolean;
   canDelete: boolean;
   onCopy: () => void;
+  onForward?: () => void;
+  onReply?: () => void;
   onDelete: () => void;
   onClose: () => void;
 };
@@ -16,6 +18,8 @@ export function MessageSelectionBar({
   canCopy,
   canDelete,
   onCopy,
+  onForward,
+  onReply,
   onDelete,
   onClose,
 }: MessageSelectionBarProps) {
@@ -38,6 +42,16 @@ export function MessageSelectionBar({
       </div>
 
       <div className='flex items-center gap-2'>
+        {onReply && (
+          <button type='button' disabled={isLoading} onClick={onReply} aria-label='Responder mensaje' title='Responder' className='cursor-pointer rounded-lg p-2 hover:bg-bg-chat'>
+            <Reply size={20} />
+          </button>
+        )}
+        {onForward && (
+          <button type='button' disabled={isLoading} onClick={onForward} aria-label='Reenviar mensajes' title='Reenviar' className='cursor-pointer rounded-lg p-2 hover:bg-bg-chat'>
+            <Forward size={20} />
+          </button>
+        )}
         {canCopy && (
           <button
             type='button'

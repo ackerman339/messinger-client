@@ -1,4 +1,5 @@
 import { LocationCompose } from './location-compose';
+import { MessageQuote } from './message-quote';
 import { useEffect, useRef, useState } from 'react';
 import { Tooltip } from 'radix-ui';
 import { ChevronRight, Smile } from 'lucide-react';
@@ -19,6 +20,8 @@ export function MessageComposer() {
     isLoadingAttachment,
     prepareAttachments,
     handleSendMessage,
+    replyTarget,
+    setReplyTarget,
   } = useChatContext();
 
   const [message, setMessage] = useState('');
@@ -39,6 +42,10 @@ export function MessageComposer() {
     textarea.style.height = 'auto';
     textarea.style.height = `${Math.min(textarea.scrollHeight, 256)}px`;
   }, [message]);
+
+  useEffect(() => {
+    if (replyTarget && !disabled) textareaRef.current?.focus();
+  }, [replyTarget, disabled]);
 
   function handleChange(value: string) {
     setMessage(value);
@@ -155,6 +162,11 @@ export function MessageComposer() {
           </div>
         )}
 
+        {replyTarget && (
+          <div className='col-span-full'>
+            <MessageQuote reply={replyTarget} onClear={() => setReplyTarget(null)} />
+          </div>
+        )}
         <div className='flex self-end'>
           <AttachmentMenu
             disabled={disabled || isLoadingAttachment}
@@ -181,6 +193,7 @@ export function MessageComposer() {
               className='block w-full resize-none bg-transparent text-[0.9375rem] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
               placeholder='Escribe un mensaje'
               rows={1}
+              maxLength={5000}
               disabled={disabled || isLoadingAttachment}
               value={message}
               onChange={(event) => {

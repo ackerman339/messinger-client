@@ -97,6 +97,8 @@ export interface MessageAttachmentDto {
 }
 
 export interface PrivateMessageDto {
+  replyToMessageId?: string;
+  forwarded?: true;
   clientMessageId?: string;
   location?: LocationInput;
   content: string;
@@ -105,6 +107,8 @@ export interface PrivateMessageDto {
 }
 
 export interface GroupMessageDto {
+  replyToMessageId?: string;
+  forwarded?: true;
   clientMessageId?: string;
   location?: LocationInput;
   content: string;

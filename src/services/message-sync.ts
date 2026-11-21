@@ -1,7 +1,7 @@
 import { mergeLocation } from '../types/location';
 import type { LocationState, LocationUpdate } from '../types/location';
 import { createLiveLocationPublisher } from './live-location-publisher';
-import type { Conversation, Message } from '../types/conversation';
+import type { Conversation, Message, MessageReply } from '../types/conversation';
 import { MessageStatus, WS_CLIENT_EVENTS, WS_SERVER_EVENTS } from '../types/websocket';
 import type {
   GroupMessageDto,
@@ -25,6 +25,7 @@ type OutgoingMessage = SendMessage & {
   id: string;
   createdAt: string;
   failed?: true;
+  replyPreview?: MessageReply;
 };
 
 type OutgoingReceipt = SendReceipt & { id: string };
@@ -130,6 +131,8 @@ export function pendingForConversation(
       content: entry.data.content,
       attachments: entry.data.attachments,
       location: entry.data.location,
+      reply: entry.replyPreview,
+      forwarded: entry.data.forwarded,
       createdAt: entry.createdAt,
       type: 'MESSAGE',
       localStatus: entry.failed ? 'FAILED' : 'PENDING',
@@ -256,13 +259,14 @@ function createMessageSync() {
     if (snapshot.connected) publish({ connected: false });
   }
 
-  function enqueue(userId: string, payload: SendMessage) {
+  function enqueue(userId: string, payload: SendMessage, replyPreview?: MessageReply) {
     if (userId !== account) return false;
     try {
       const id = newMessageId();
       const entry = {
         ...payload,
         data: { ...payload.data, clientMessageId: id },
+        ...(replyPreview ? { replyPreview } : {}),
         id,
         createdAt: new Date().toISOString(),
       } as OutgoingMessage;

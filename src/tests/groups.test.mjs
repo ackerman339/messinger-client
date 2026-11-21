@@ -390,6 +390,7 @@ test('the provider adds incoming invitations as pending conversations and remove
   const { ChatProvider } = load('providers/chat-provider.tsx', {
     react: { ...react, useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() },
     '@/services/message-sync': { messageSync: { getSnapshot: () => ({ connectionEpoch: 1 }) } },
+    '@/services/message-actions': load('services/message-actions.ts'),
     'react-router-dom': {
       useSearchParams: () => [new URLSearchParams(), () => {}],
     },

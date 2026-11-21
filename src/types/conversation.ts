@@ -12,7 +12,15 @@ export type Member = {
   softDeletedAt?: string | null;
 };
 
+export type MessageReply = {
+  messageId: string;
+  senderId: string | null;
+  excerpt: string;
+};
+
 export type Message = {
+  reply?: MessageReply;
+  forwarded?: true;
   clientMessageId?: string;
   deliveries?: { userId: string; status: MessageStatus }[];
   location?: LocationState;

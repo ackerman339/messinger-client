@@ -1,4 +1,6 @@
 import { LocationContent } from './location-content';
+import { MessageQuote } from './message-quote';
+import { ForwardMessagesDialog } from './forward-messages-dialog';
 import { mergeLocation } from '@/types/location';
 import type { LocationState } from '@/types/location';
 import {
@@ -36,11 +38,12 @@ import type { Message, ConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
   const { user } = useUserContext();
-  const { activeConversation, isLoadingAttachment, emptiedConversation } = useChatContext();
+  const { activeConversation, isLoadingAttachment, emptiedConversation, setReplyTarget } = useChatContext();
   const hasConversation = !!activeConversation;
   const conversationId = activeConversation?.id;
 
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [forwardOpen, setForwardOpen] = useState(false);
   const [isDeletingMesssagesLoading, setIsDeleteMessagesLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -357,15 +360,7 @@ export function MessageList() {
       }
 
       const message = items.find((item) => (item.messageId || item.id) === messageId);
-      if (!message || message.localStatus) return current;
-      if (message.senderId !== user?.id && (message.content === '' || message.attachments?.length))
-        return current;
-      if (current.length > 0) {
-        const selectedAreOwn = current.every((id) =>
-          items.some((item) => (item.messageId || item.id) === id && item.senderId === user?.id),
-        );
-        if (!user || message.senderId !== user.id || !selectedAreOwn) return current;
-      }
+      if (!message || message.localStatus || (message.type && message.type !== 'MESSAGE')) return current;
 
       return [...current, messageId];
     });
@@ -426,6 +421,16 @@ export function MessageList() {
         <EmptyState label='No hay mensajes todavía' />
       )}
 
+      {forwardOpen && (
+        <ForwardMessagesDialog
+          messages={selectedMessages}
+          onClose={() => setForwardOpen(false)}
+          onDone={() => {
+            setForwardOpen(false);
+            clearSelection();
+          }}
+        />
+      )}
       {selectedMessageIds.length > 0 && (
         <MessageSelectionBar
           count={selectedMessageIds.length}
@@ -433,6 +438,11 @@ export function MessageList() {
           canCopy={selectedText !== ''}
           canDelete={canDelete}
           onCopy={copyMessages}
+          onForward={selectedMessages.length > 0 ? () => setForwardOpen(true) : undefined}
+          onReply={selectedMessages.length === 1 && !activeConversation?.isDeleted ? () => {
+            setReplyTarget(selectedMessages[0]);
+            clearSelection();
+          } : undefined}
           onDelete={deleteMessages}
           onClose={clearSelection}
         />
@@ -576,6 +586,8 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
         {senderName && (
           <p className='mb-1 truncate text-xs font-semibold text-accent'>{senderName}</p>
         )}
+        {message.forwarded && <p className='mb-1 text-xs italic text-text-secondary'>Reenviado</p>}
+        {message.reply && <MessageQuote reply={message.reply} />}
         {location ? (
           <LocationContent
             location={location}

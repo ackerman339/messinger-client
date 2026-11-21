@@ -29,6 +29,11 @@ export const fileService = {
     return response.data.result;
   },
 
+  prepareForward: async (attachmentIds: string[]) => {
+    const { data } = await httpClient.post<ApiResponse<FileAttachment[]>>('/attachments/forward', { attachmentIds });
+    return data.result;
+  },
+
   downloadAudioBytes: async (attachmentId: string, signal: AbortSignal) => {
     const response = await httpClient.get<ArrayBuffer>('/download', {
       params: { attachmentId, format: 'audio-bytes' },

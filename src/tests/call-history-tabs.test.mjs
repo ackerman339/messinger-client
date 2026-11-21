@@ -48,6 +48,9 @@ const searchCode = ts.transpileModule(
   { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 } },
 ).outputText;
 
+function Statuses() {
+  return React.createElement('section', null, 'statuses fixture');
+}
 function Calls() {
   return React.createElement('section', null, 'calls fixture');
 }
@@ -61,6 +64,7 @@ function nodes(node) {
 }
 function fixture({ conversations = [], contacts = new Map() } = {}) {
   let selected = 'chats';
+  const feed = { own: { unseen: true }, others: [] };
   let query = '';
   let paginationRequests = 0;
   let paginationEnabled;
@@ -95,6 +99,8 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
     if (name.endsWith('/call-buttons')) return { CallButtons: () => null };
     if (name === './header-button') return { HeaderButton: () => null };
     if (name.includes('/lib/utils')) return {};
+    if (name.endsWith('/hooks/use-statuses')) return { useStatuses: () => feed };
+    if (name === './statuses-panel') return { StatusesPanel: Statuses };
     if (name.includes('contacts-list')) return { ContactsList: Contacts };
     if (name.includes('call-history-list')) return { CallHistoryList: Calls };
     if (name.includes('chat-menu'))
@@ -144,7 +150,11 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
   const header = { exports: {} };
   new Function('require', 'module', 'exports', headerCode)(dependency, header, header.exports);
   return {
-    render: () => module.exports.ConversationList(),
+    render() {
+      const section = module.exports.ConversationList();
+      return section.type(section.props);
+    },
+    feed,
     renderHeader(conversation) {
       context.activeConversation = conversation;
       return header.exports.ChatHeader();
@@ -166,7 +176,19 @@ test('web uses Radix Tabs in the conversation sidebar and renders the selected c
   assert.ok(chats.props.className.includes('data-[state=inactive]:hidden'));
   let html = require('react-dom/server').renderToStaticMarkup(tree);
   assert.ok(html.includes('role="tablist"'));
-  assert.ok(html.includes('Chats, llamadas y contactos'));
+  assert.ok(html.includes('Conversaciones, llamadas, contactos y estados'));
+  const tabBar = nodes(tree).find((node) => node.type === require('radix-ui').Tabs.List);
+  assert.ok(tabBar.props.className.includes('order-last'));
+  assert.ok(tabBar.props.className.includes('md:order-0'));
+  const statusTab = nodes(tabBar).find((node) => node.props?.value === 'statuses');
+  assert.ok(statusTab.props.className.includes('flex-col'));
+  assert.ok(statusTab.props.className.includes('md:@min-[22rem]:flex-row'));
+  assert.ok(tabBar.props.className.includes('overflow-x-auto'));
+  for (const value of ['calls', 'contacts', 'statuses']) {
+    const trigger = nodes(tabBar).find((node) => node.props?.value === value);
+    assert.ok(trigger.props.className.includes('min-w-max'));
+    assert.ok(nodes(trigger).some((node) => node.props?.className?.includes('whitespace-nowrap')));
+  }
   assert.ok(!html.includes('calls fixture'));
   tree.props.onValueChange('calls');
   tree = view.render();
@@ -179,6 +201,10 @@ test('web uses Radix Tabs in the conversation sidebar and renders the selected c
   assert.ok(html.includes('contacts fixture'));
   assert.ok(!html.includes('calls fixture'));
   assert.equal(view.paginationEnabled(), false);
+  tree.props.onValueChange('statuses');
+  html = require('react-dom/server').renderToStaticMarkup(view.render());
+  assert.ok(html.includes('statuses fixture'));
+  assert.ok(!html.includes('contacts fixture'));
 });
 
 test('conversation rows use the saved contact name only for private chats', () => {
@@ -275,4 +301,23 @@ test('the conversation search uses local usernames, saved names and group names'
     }
     assert.equal(view.paginationRequests(), 0);
   }
+});
+
+test('the new-status dot reflects unread contacts on every tab and uses the feed shown in Estados', () => {
+  const view = fixture();
+  const statusTab = () => nodes(view.render()).find((node) => node.props?.value === 'statuses' && node.props?.['aria-label']);
+  const hasDot = () => nodes(statusTab()).some((node) => node.props?.className?.includes('bg-blue-600'));
+
+  assert.equal(statusTab().props['aria-label'], 'Estados');
+  assert.equal(hasDot(), false);
+  view.feed.others = [{ unseen: true }, { unseen: false }];
+  assert.equal(statusTab().props['aria-label'], 'Estados, hay estados nuevos');
+  assert.equal(hasDot(), true);
+  view.render().props.onValueChange('statuses');
+  const panel = nodes(view.render()).find((node) => node.type === Statuses);
+  assert.equal(panel.props.feed, view.feed);
+  assert.equal(hasDot(), true);
+  view.feed.others[0].unseen = false;
+  assert.equal(statusTab().props['aria-label'], 'Estados');
+  assert.equal(hasDot(), false);
 });

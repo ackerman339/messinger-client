@@ -1,7 +1,7 @@
 import type { LocationInput } from '../types/location';
 import { createContext, useContext } from 'react';
 
-import type { Conversation } from '@/types/conversation';
+import type { Conversation, Message, MessageReply } from '@/types/conversation';
 import type { FileAttachment } from '@/types/file';
 import type { User } from '@/types/user';
 import type { Response } from '@/services/user';
@@ -14,6 +14,8 @@ export type ChatContextValue = {
   receiverId: string;
   hasMoreConversations: boolean;
   isLoadingAttachment: boolean;
+  replyTarget: MessageReply | null;
+  setReplyTarget: (message: Message | null) => void;
   emptiedConversation: Pick<Conversation, 'id'> | null;
   handleSendMessage: (
     content: string,
@@ -46,6 +48,8 @@ export const ChatContext = createContext<ChatContextValue>({
   hasMoreConversations: false,
   isLoadingAttachment: false,
   emptiedConversation: null,
+  replyTarget: null,
+  setReplyTarget: () => {},
   handleSendMessage: () => false,
   handleCurrentConversation: () => {},
   prepareAttachments: async () => [] as FileAttachment[],
