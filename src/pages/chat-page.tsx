@@ -1,3 +1,4 @@
+import { ContactsProvider } from '@/providers/contacts-provider';
 import { GroupCallProvider } from '@/group-calls/group-call-provider';
 import { GroupCallPanel } from '@/group-calls/group-call-panel';
 import { CallPanel } from '@/calls/componentes/call-panel';
@@ -14,7 +15,9 @@ export function ChatPage() {
         <CallProvider>
           <ChatProvider>
             <GroupCallProvider>
-              <ChatLayout />
+              <ContactsProvider>
+                <ChatLayout />
+              </ContactsProvider>
               <CallPanel />
               <GroupCallPanel />
             </GroupCallProvider>

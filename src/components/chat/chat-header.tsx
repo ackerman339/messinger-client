@@ -1,3 +1,5 @@
+import { contactDisplayName } from '@/types/contact';
+import { useContactsContext } from '@/context/contacts-context';
 import { GroupCallButtons } from '@/group-calls/group-call-controls';
 import { HeaderButton } from './header-button';
 import { useLayoutEffect, useState } from 'react';
@@ -12,6 +14,7 @@ import { wsClient } from '@clients/websocket-client';
 
 export function ChatHeader() {
   const { user } = useUserContext();
+  const { contacts } = useContactsContext();
   const { activeConversation, unSetCurrentConversation } = useChatContext();
   const [presence, setPresence] = useState<{
     online: boolean;
@@ -21,14 +24,14 @@ export function ChatHeader() {
     lastSeenAt: null,
   });
 
-  useLayoutEffect(() => {
-    if (!activeConversation) {
-      return;
-    }
+  const privateConversationMember =
+    activeConversation?.type === 'PRIVATE'
+      ? activeConversation.members.find((member) => member.userId !== user?.id)
+      : undefined;
+  const participantId = privateConversationMember?.userId;
 
-    if (activeConversation.type !== 'PRIVATE') {
-      return;
-    }
+  useLayoutEffect(() => {
+    if (!participantId) return;
 
     const unsubscribeUserPresenceOnline = wsClient.on(
       WS_SERVER_EVENTS.PRESENCE_ONLINE,
@@ -44,32 +47,27 @@ export function ChatHeader() {
       },
     );
 
-    const privateConversationMember = activeConversation.members.filter(
-      (member) => member.userId !== user?.id,
-    )[0];
-
-    wsClient.emit('PRESENCE_ONLINE', {
-      receiverId: privateConversationMember.userId,
-    });
+    wsClient.emit('PRESENCE_ONLINE', { receiverId: participantId });
 
     return () => {
       unsubscribeUserPresenceOnline();
       unsubscribeUserPresenceOffline();
     };
-  }, [activeConversation, user]);
+  }, [participantId]);
 
   if (!activeConversation) {
     return null;
   }
 
-  const privateConversationMember = activeConversation.members.filter(
-    (member) => member.userId !== user?.id,
-  )[0];
-
+  const contact = privateConversationMember && contacts.get(privateConversationMember.userId);
+  const avatarUrl =
+    privateConversationMember?.avatarUrl === undefined
+      ? contact?.avatarUrl
+      : privateConversationMember.avatarUrl;
   const title =
     activeConversation.type === 'GROUP'
       ? activeConversation?.name
-      : privateConversationMember?.username || 'Usuario Eliminado';
+      : contactDisplayName(contact, privateConversationMember?.username || 'Usuario Eliminado');
 
   return (
     <header className='flex h-16 items-center justify-between border-b border-border bg-bg-app px-4'>
@@ -84,7 +82,7 @@ export function ChatHeader() {
           </button>
         </div>
         <Avatar.Root className='grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
-          <Avatar.Image className='size-full object-cover' src={undefined} alt='' />
+          <Avatar.Image className='size-full object-cover' src={avatarUrl ?? undefined} alt='' />
           <Avatar.Fallback>{title ? title.slice(0, 2).toUpperCase() : ''}</Avatar.Fallback>
         </Avatar.Root>
         <div className='min-w-0'>

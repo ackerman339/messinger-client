@@ -1,3 +1,5 @@
+import { useContactsContext } from '@/context/contacts-context';
+import { ContactDialog } from './contact-dialog';
 import { AlertDialog, DropdownMenu } from 'radix-ui';
 import {
   BrushCleaning,
@@ -22,6 +24,7 @@ type Notice = { title: string; description: string; error?: boolean };
 
 export function HeaderButton() {
   const { user } = useUserContext();
+  const { contacts, status } = useContactsContext();
   const { activeConversation, handleEmptyChat } = useChatContext();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -31,6 +34,7 @@ export function HeaderButton() {
   const [groupAction, setGroupAction] = useState<
     'delete' | 'transfer' | 'leave' | null
   >(null);
+  const [addContactOpen, setAddContactOpen] = useState(false);
   const pending = useRef(false);
   const groupMember = activeConversation?.members.find(
     (member) => member.userId === user?.id && !member.softDeletedAt,
@@ -180,6 +184,22 @@ export function HeaderButton() {
                 </DropdownMenu.Item>
               )}
             {isActiveGroup && isOwner && renderGroupAction('transfer')}
+            {activeConversation.type === 'PRIVATE' &&
+              participant &&
+              status === 'ready' &&
+              !contacts.has(participant.userId) && (
+                <DropdownMenu.Item
+                  className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+                  aria-label='Agregar como contacto'
+                  onSelect={() => {
+                    setOpen(false);
+                    setAddContactOpen(true);
+                  }}
+                >
+                  <UserPlus size={18} />
+                  <span>Agregar como contacto</span>
+                </DropdownMenu.Item>
+              )}
             {activeConversation.type === 'PRIVATE' && participant && (
               <DropdownMenu.Item
                 disabled={busy}
@@ -216,6 +236,12 @@ export function HeaderButton() {
           </DropdownMenu.Content>
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
+      {addContactOpen && activeConversation.type === 'PRIVATE' && (
+        <ContactDialog
+          conversationId={activeConversation.id}
+          onClose={() => setAddContactOpen(false)}
+        />
+      )}
       {groupAction && isActiveGroup && (
         <GroupManagementDialog
           key={activeConversation.id}

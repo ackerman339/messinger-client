@@ -96,11 +96,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  function updateProfile(profile: User) {
+    setUser((current) => current?.id === profile.id ? profile : current);
+  }
+
   return (
     <UserContext.Provider
       value={{
         user,
         loading,
+        updateProfile,
         logout,
       }}
     >

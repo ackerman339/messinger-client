@@ -1,7 +1,10 @@
+import { ContactsList } from './contacts-list';
 import { CallHistoryList } from './call-history-list';
 import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import { Avatar, Tabs } from 'radix-ui';
-import { MessagesSquare, Phone } from 'lucide-react';
+import { ContactRound, MessagesSquare, Phone } from 'lucide-react';
+import { useContactsContext } from '@/context/contacts-context';
+import { contactDisplayName } from '@/types/contact';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { ChatMenu } from './chat-menu';
@@ -87,8 +90,8 @@ export function ConversationList() {
           </span>
         </header>
         <Tabs.List
-          aria-label='Chats y llamadas'
-          className='grid shrink-0 grid-cols-2 border-b border-border px-3'
+          aria-label='Chats, llamadas y contactos'
+          className='grid shrink-0 grid-cols-3 border-b border-border px-3'
         >
           <Tabs.Trigger
             value='chats'
@@ -103,6 +106,13 @@ export function ConversationList() {
           >
             <Phone size={18} aria-hidden='true' />
             Llamadas
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value='contacts'
+            className='flex items-center justify-center gap-2 border-b-2 border-transparent py-3 text-sm font-semibold text-text-secondary outline-none transition-colors hover:bg-accent/5 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent data-[state=active]:border-accent data-[state=active]:text-accent cursor-pointer'
+          >
+            <ContactRound size={18} aria-hidden='true' />
+            Contactos
           </Tabs.Trigger>
         </Tabs.List>
         <Tabs.Content
@@ -148,6 +158,12 @@ export function ConversationList() {
         >
           <CallHistoryList />
         </Tabs.Content>
+        <Tabs.Content
+          value='contacts'
+          className='flex min-h-0 flex-1 flex-col outline-none data-[state=inactive]:hidden'
+        >
+          <ContactsList />
+        </Tabs.Content>
       </aside>
     </Tabs.Root>
   );
@@ -181,20 +197,27 @@ function ConversationRow({
   onSelect,
 }: ConversationRowProps) {
   const { user } = useUserContext();
+  const { contacts } = useContactsContext();
   const { activeConversation, emptiedConversation } = useChatContext();
 
-  const privateConversationMember = conversation?.members.filter(
-    (member) => member.userId !== user?.id,
-  )[0];
+  const privateConversationMember =
+    conversation.type === 'PRIVATE'
+      ? conversation.members.find((member) => member.userId !== user?.id)
+      : undefined;
 
   const privateConversationUser = conversation?.members.filter(
     (member) => member.userId === user?.id,
   )[0];
 
+  const contact = privateConversationMember && contacts.get(privateConversationMember.userId);
+  const avatarUrl =
+    privateConversationMember?.avatarUrl === undefined
+      ? contact?.avatarUrl
+      : privateConversationMember.avatarUrl;
   const title =
     conversation.type === 'GROUP'
-      ? conversation?.name
-      : privateConversationMember?.username || 'Usuario Eliminado';
+      ? conversation.name
+      : contactDisplayName(contact, privateConversationMember?.username || 'Usuario Eliminado');
 
   const [unreadMessageCount, setUnreadMessagesCount] = useState(
     privateConversationUser?.unreadCount ?? 0,
@@ -318,7 +341,7 @@ function ConversationRow({
       <Avatar.Root className='relative grid size-12 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-sm font-semibold text-white'>
         <Avatar.Image
           className='size-full object-cover'
-          src={undefined}
+          src={avatarUrl ?? undefined}
           alt=''
         />
         <Avatar.Fallback>

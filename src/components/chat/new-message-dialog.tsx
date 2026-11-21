@@ -8,10 +8,11 @@ import { MessageComposer } from './message-composer';
 
 type NewMessageDialogProps = {
   open: boolean;
+  recipientName?: string;
   onOpenChange: (open: boolean) => void;
 };
 
-export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) {
+export function NewMessageDialog({ open, recipientName, onOpenChange }: NewMessageDialogProps) {
   const { getUserByCode, receiverId, handleReceiverId, unSetCurrentConversation } =
     useChatContext();
 
@@ -60,7 +61,7 @@ export function NewMessageDialog({ open, onOpenChange }: NewMessageDialogProps) 
 
         <Dialog.Content className='fixed left-1/2 top-1/2 z-50 w-[min(95vw,520px)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-bg-app shadow-xl'>
           <div className='flex items-center justify-between border-b border-border px-4 py-3'>
-            <Dialog.Title className='font-semibold'>Nuevo mensaje</Dialog.Title>
+            <Dialog.Title className='font-semibold'>{recipientName ? `Mensaje para ${recipientName}` : 'Nuevo mensaje'}</Dialog.Title>
 
             <Dialog.Close asChild>
               <button

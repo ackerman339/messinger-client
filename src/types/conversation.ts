@@ -5,6 +5,7 @@ import type { FileAttachment } from './file';
 export type Member = {
   userId: string;
   username: string;
+  avatarUrl?: string | null;
   lastSeenAt: string | null;
   unreadCount: number;
   role?: 'OWNER' | 'MEMBER';

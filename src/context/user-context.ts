@@ -5,6 +5,7 @@ import type { User } from '@/types/user';
 interface UserContextValue {
   user: User | null;
   loading: boolean;
+  updateProfile: (profile: User) => void;
   logout: () => Promise<void>;
 }
 

@@ -144,17 +144,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         current === id ? '' : current,
       );
     }
-    function cacheGroupMessage(
+    function cacheConversationMessage(
       message: import('@/types/conversation').Message,
     ) {
       const id = message.conversationId ?? message.conversation?.id;
       if (!id) return;
       setConversations((previous) => {
-        const group = previous.get(id);
-        if (!group || group.type !== 'GROUP' || group.isDeleted)
-          return previous;
+        const conversation = previous.get(id);
+        if (!conversation || conversation.isDeleted) return previous;
+
+        if (conversation.type === 'PRIVATE') {
+          const participant = message.conversation?.members?.find(
+            (member) => member.userId !== userId,
+          );
+          if (participant?.avatarUrl === undefined) return previous;
+
+          const existing = conversation.members.find(
+            (member) => member.userId === participant.userId,
+          );
+          if (!existing || existing.avatarUrl === participant.avatarUrl) return previous;
+
+          const members = conversation.members.map((member) =>
+            member === existing ? { ...member, avatarUrl: participant.avatarUrl } : member,
+          );
+          return new Map(previous).set(id, { ...conversation, members });
+        }
+
         const next = new Map(previous);
-        const messages = [message, ...group.messages].filter(
+        const messages = [message, ...conversation.messages].filter(
           (item, index, all) =>
             all.findIndex(
               (other) =>
@@ -162,12 +179,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
                 (item.id || item.messageId),
             ) === index,
         );
-        next.set(id, { ...group, messages, lastMessage: message });
+        next.set(id, { ...conversation, messages, lastMessage: message });
         return next;
       });
     }
     const off = [
-      wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, cacheGroupMessage),
+      wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, cacheConversationMessage),
       wsClient.on(
         WS_SERVER_EVENTS.GROUP_INVITATION_REJECTED,
         ({ conversationId }) => remove(conversationId),
@@ -214,7 +231,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         handleGroupDeleted(conversationId),
       ),
       wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-        cacheGroupMessage(message);
+        cacheConversationMessage(message);
         if (
           !message.conversation &&
           message.conversationId &&

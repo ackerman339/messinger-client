@@ -26,6 +26,7 @@ function fixture({
   role = 'MEMBER',
   invitation,
   isDeleted,
+  contacts = new Map(),
   empty = async () => {},
   request = async () => {},
 } = {}) {
@@ -42,6 +43,10 @@ function fixture({
     members: [{ userId: 'alice', role }, { userId: 'bob' }],
   };
   const dependencies = {
+    './contact-dialog': { ContactDialog: () => null },
+    '@/context/contacts-context': {
+      useContactsContext: () => ({ status: 'ready', contacts }),
+    },
     './invite-group-dialog': { InviteGroupDialog: () => null },
     './group-management-dialog': { GroupManagementDialog: () => null },
     react: {
@@ -215,4 +220,12 @@ test('group administration options match the current role and deleted state', ()
   });
   assert.equal(deleted.action('Eliminar grupo'), undefined);
   assert.equal(deleted.action('Invitar personas'), undefined);
+});
+
+test('only private conversations with an unsaved participant offer adding a contact', () => {
+  assert.equal(typeof fixture().action('Agregar como contacto'), 'function');
+  assert.equal(fixture({ type: 'GROUP' }).action('Agregar como contacto'), undefined);
+  const contacts = new Map([['bob', { userId: 'bob' }]]);
+  const saved = fixture({ contacts });
+  assert.equal(saved.action('Agregar como contacto'), undefined);
 });

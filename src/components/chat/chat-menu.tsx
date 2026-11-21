@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { DropdownMenu } from 'radix-ui';
-import { Copy, LogOut, MessageCircle, Menu, Users } from 'lucide-react';
+import { Copy, LogOut, MessageCircle, Menu, Settings, Users } from 'lucide-react';
 import { useUserContext } from '@context/user-context';
+import { ProfileDialog } from './profile-dialog';
 import { NewMessageDialog } from './new-message-dialog';
 import { CreateGroupDialog } from './create-group-dialog';
 
 export function ChatMenu() {
   const { user, logout } = useUserContext();
+  const [showProfile, setShowProfile] = useState(false);
   const [newMessageOpen, setNewMessageOpen] = useState(false);
   const [newGroupOpen, setNewGroupOpen] = useState(false);
 
@@ -63,6 +65,14 @@ export function ChatMenu() {
               <span>Copiar tu código de usuario</span>
             </DropdownMenu.Item>
 
+            <DropdownMenu.Item
+              className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm outline-none hover:bg-slate-100'
+              onSelect={() => setShowProfile(true)}
+            >
+              <Settings size={18} />
+              <span>Ajustes</span>
+            </DropdownMenu.Item>
+
             <DropdownMenu.Separator className='my-1 h-px bg-border' />
 
             <DropdownMenu.Item
@@ -76,6 +86,7 @@ export function ChatMenu() {
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
 
+      {showProfile && <ProfileDialog onClose={() => setShowProfile(false)} />}
       <CreateGroupDialog
         open={newGroupOpen}
         onOpenChange={setNewGroupOpen}
