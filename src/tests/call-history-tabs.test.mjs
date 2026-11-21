@@ -43,6 +43,11 @@ const listStateCode = ts.transpileModule(listStateSource, {
 const listState = { exports: {} };
 new Function('exports', listStateCode)(listState.exports);
 
+const searchCode = ts.transpileModule(
+  fs.readFileSync(new URL('../hooks/use-conversation-search.ts', import.meta.url), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 } },
+).outputText;
+
 function Calls() {
   return React.createElement('section', null, 'calls fixture');
 }
@@ -56,6 +61,8 @@ function nodes(node) {
 }
 function fixture({ conversations = [], contacts = new Map() } = {}) {
   let selected = 'chats';
+  let query = '';
+  let paginationRequests = 0;
   let paginationEnabled;
   const hooks = {
     useState: (initial) =>
@@ -66,7 +73,8 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
               selected = value;
             },
           ]
-        : [initial, () => {}],
+        : [query, (value) => { query = value; }],
+    useMemo: (fn) => fn(),
     useRef: (current) => ({ current }),
     useCallback: (fn) => fn,
     useEffect() {},
@@ -78,7 +86,7 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
     loadingConversations: false,
     hasMoreConversations: true,
     handleCurrentConversation() {},
-    loadMoreConversations() {},
+    loadMoreConversations() { paginationRequests += 1; },
     handleNewConversation() {},
   };
   function dependency(name) {
@@ -94,6 +102,7 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
     if (name.includes('contacts-context')) return { useContactsContext: () => ({ contacts }) };
     if (name.endsWith('/types/contact')) return contactTypes.exports;
     if (name.endsWith('/services/conversation-list-state')) return listState.exports;
+    if (name.endsWith('/hooks/use-conversation-search')) return search.exports;
     if (name.includes('chat-context')) return { useChatContext: () => context };
     if (name.includes('user-context'))
       return { useUserContext: () => ({ user: { id: 'alice' } }) };
@@ -124,6 +133,8 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
     if (name.startsWith('@')) return {};
     return require(name);
   }
+  const search = { exports: {} };
+  new Function('require', 'module', 'exports', searchCode)(dependency, search, search.exports);
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(
     dependency,
@@ -139,6 +150,7 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
       return header.exports.ChatHeader();
     },
     paginationEnabled: () => paginationEnabled,
+    paginationRequests: () => paginationRequests,
   };
 }
 test('web uses Radix Tabs in the conversation sidebar and renders the selected calls panel', () => {
@@ -230,4 +242,37 @@ test('chat rows and headers show the participant image and fall back after remov
   participant.avatarUrl = null;
   assert.equal(avatarSrc(renderedRow(privateChat)), undefined);
   assert.equal(avatarSrc(view.renderHeader(privateChat)), undefined);
+});
+
+test('the conversation search uses local usernames, saved names and group names', () => {
+  const members = [{ userId: 'alice', username: 'Mi usuario' }, { userId: 'bob', username: 'Roberto' }];
+  const conversations = [
+    { id: 'private', type: 'PRIVATE', updatedAt: '2026-11-21', members },
+    { id: 'group', type: 'GROUP', name: 'Equipo Noche', updatedAt: '2026-11-20', members },
+    {
+      id: 'old-group', type: 'GROUP', name: 'Archivo', updatedAt: '2026-11-19',
+      members: [{ ...members[1], softDeletedAt: '2026-11-20' }],
+    },
+  ];
+  const contacts = new Map([['bob', { name: 'Béto Pérez', username: 'Roberto' }]]);
+  const view = fixture({ contacts, conversations });
+
+  for (const [query, expected] of [
+    ['  BETO perez ', ['private', 'group']],
+    ['roberto', ['private', 'group']],
+    ['noche', ['group']],
+    ['Mi usuario', []],
+    [' ', ['private', 'group', 'old-group']],
+  ]) {
+    const search = nodes(view.render()).find((node) => node.props?.placeholder === 'Buscar conversaciones');
+    search.props.onChange({ target: { value: query } });
+    const rendered = view.render();
+    const rows = nodes(rendered).map((node) => node.props?.conversation?.id).filter(Boolean);
+    assert.deepEqual(rows, expected);
+    assert.equal(view.paginationEnabled(), !query.trim());
+    if (expected.length === 0) {
+      assert.ok(nodes(rendered).some((node) => node.props?.label === 'No se encontraron conversaciones'));
+    }
+    assert.equal(view.paginationRequests(), 0);
+  }
 });

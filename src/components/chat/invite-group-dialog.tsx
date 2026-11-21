@@ -1,3 +1,4 @@
+import { GROUP_MEMBER_LIMIT_MESSAGE, MAX_GROUP_MEMBERS } from '@/lib/group-limits';
 import { useEffect, useRef, useState } from 'react';
 import { Dialog } from 'radix-ui';
 import { X } from 'lucide-react';
@@ -26,6 +27,10 @@ export function InviteGroupDialog({
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [retry, setRetry] = useState(0);
+  const activeMembers = group.members.filter((member) => !member.softDeletedAt).length;
+  const availableSlots = Math.max(0, MAX_GROUP_MEMBERS - activeMembers);
+  const selectionIsFull = selected.length >= availableSlots;
+  const cannotSend = loading || busy || !selected.length || selected.length > availableSlots;
   const pending = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -54,7 +59,7 @@ export function InviteGroupDialog({
     };
   }, [group, user?.id, retry]);
   async function invite() {
-    if (pending.current || !selected.length) return;
+    if (pending.current || cannotSend) return;
     pending.current = true;
     setBusy(true);
     setError('');
@@ -109,6 +114,9 @@ export function InviteGroupDialog({
             Selecciona las personas con las que has conversado para
             invitarlas a {group.name}.
           </Dialog.Description>
+          <p className='mt-2 text-sm text-text-secondary'>
+            {availableSlots ? `${activeMembers}/${MAX_GROUP_MEMBERS} miembros` : GROUP_MEMBER_LIMIT_MESSAGE}
+          </p>
           <input
             type='search'
             aria-label='Buscar personas'
@@ -136,7 +144,10 @@ export function InviteGroupDialog({
                 >
                   <input
                     type='checkbox'
-                    disabled={busy || sent.includes(contact.userId)}
+                    disabled={
+                      busy || sent.includes(contact.userId) ||
+                      (selectionIsFull && !selected.includes(contact.userId))
+                    }
                     checked={
                       selected.includes(contact.userId) ||
                       sent.includes(contact.userId)
@@ -187,7 +198,7 @@ export function InviteGroupDialog({
           )}
           <button
             type='button'
-            disabled={loading || busy || !selected.length}
+            disabled={cannotSend}
             onClick={invite}
             className='h-11 shrink-0 rounded-lg bg-accent font-medium text-white disabled:opacity-40'
           >

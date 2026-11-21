@@ -3,10 +3,12 @@ import { Avatar, Dialog } from 'radix-ui';
 import { ImagePlus, Save, Trash2, X } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import { useUserContext } from '@/context/user-context';
+import { getTextSize, setTextSize, TEXT_SIZES } from '@/services/text-size';
 import { AVATAR_TYPES, MAX_AVATAR_BYTES, userService } from '@/services/user';
 
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const { user, updateProfile } = useUserContext();
+  const [textSize, selectTextSize] = useState(getTextSize);
   const [username, setUsername] = useState(user?.username ?? '');
   const [busy, setBusy] = useState(false);
   const [confirmRemoval, setConfirmRemoval] = useState(false);
@@ -76,7 +78,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
     >
       <Dialog.Portal>
         <Dialog.Overlay className='fixed inset-0 z-[60] bg-black/40' />
-        <Dialog.Content className='fixed left-1/2 top-1/2 z-[60] w-[min(92vw,420px)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-bg-app p-5 shadow-xl'>
+        <Dialog.Content className='fixed left-1/2 top-1/2 z-[60] max-h-[90dvh] w-[min(92vw,420px)] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-xl bg-bg-app p-5 shadow-xl'>
           <div className='mb-4 flex items-center justify-between'>
             <Dialog.Title className='font-semibold'>Ajustes de perfil</Dialog.Title>
             <Dialog.Close asChild>
@@ -91,7 +93,7 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
             </Dialog.Close>
           </div>
           <Dialog.Description className='sr-only'>
-            Actualiza tu avatar y tu nombre de usuario.
+            Cambia tu perfil y el tamaño de texto de la aplicación.
           </Dialog.Description>
           <div className='mb-5 flex flex-col items-center gap-3'>
             <Avatar.Root className='grid size-20 shrink-0 place-items-center overflow-hidden rounded-full bg-accent text-xl font-semibold text-white ring-4 ring-accent/10'>
@@ -204,6 +206,27 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
               </button>
             </div>
           </form>
+          <fieldset className='mt-5 border-t border-border pt-2 text-sm'>
+            <legend className='pr-2 font-semibold'>Tamaño de texto</legend>
+            <div className='flex flex-wrap gap-x-4 gap-y-1'>
+              {TEXT_SIZES.map((option) => (
+                <label key={option.value} className='flex min-h-8 cursor-pointer items-center gap-2'>
+                  <input
+                    type='radio'
+                    name='text-size'
+                    value={option.value}
+                    checked={textSize === option.value}
+                    onChange={() => {
+                      setTextSize(option);
+                      selectTextSize(option.value);
+                    }}
+                    className='size-4 accent-accent'
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

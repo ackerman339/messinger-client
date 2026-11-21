@@ -9,7 +9,7 @@ import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { ChatMenu } from './chat-menu';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
-import { sortConversations } from '@/services/conversation-list-state';
+import { useConversationSearch } from '@/hooks/use-conversation-search';
 import { conversationService } from '@/services/conversation';
 import { wsClient } from '@clients/websocket-client';
 
@@ -31,19 +31,20 @@ export function ConversationList() {
     refreshConversations,
     error,
   } = useChatContext();
+  const { query, setQuery, results: conversationsItems, isSearching } =
+    useConversationSearch(conversations);
 
   const viewportRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useInfiniteScrollSentinel<HTMLDivElement>({
     onIntersect: loadMoreConversations,
     enabled:
       activeTab === 'chats' &&
+      !isSearching &&
       hasMoreConversations &&
       !loadingConversations,
     rootRef: viewportRef,
     rootMargin: '10px',
   });
-
-  const conversationsItems = sortConversations(conversations.values());
 
   const handleSelect = handleCurrentConversation;
 
@@ -92,6 +93,8 @@ export function ConversationList() {
               <span className='sr-only'>Buscar conversaciones</span>
               <input
                 className='w-full bg-transparent text-text-primary outline-none placeholder:text-text-secondary'
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
                 placeholder='Buscar conversaciones'
                 type='search'
               />
@@ -109,10 +112,12 @@ export function ConversationList() {
                 </button>
               </div>
             )}
-            {loadingConversations && conversations.size === 0 && (
+            {!isSearching && loadingConversations && conversations.size === 0 && (
               <ListState label='Cargando conversaciones...' />
             )}
-            {!loadingConversations && conversations.size === 0 ? (
+            {isSearching && conversationsItems.length === 0 ? (
+              <ListState label='No se encontraron conversaciones' />
+            ) : !loadingConversations && conversations.size === 0 ? (
               <ListState label='No tienes conversaciones aún' />
             ) : (
               conversationsItems.map((conversation) => (
@@ -311,7 +316,7 @@ function ConversationRow({
 
       {unreadMessageCount > 0 && (
         <div className='grid place-content-center size-7 rounded-full bg-accent'>
-          <span className='text-[10px] text-white font-bold'>
+          <span className='text-[0.625rem] text-white font-bold'>
             {unreadMessageCount}
           </span>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronUp, Mic, MicOff, PhoneOff, Video, VideoOff } from 'lucide-react';
 import { ConnectionState } from 'livekit-client';
+import { MAX_GROUP_CALL_PARTICIPANTS } from '@/lib/group-limits';
 import type { AudioTrack, VideoTrack } from 'livekit-client';
 import { useGroupCall } from './group-call-context';
 import type { GroupCallView } from './group-call-context';
@@ -60,7 +61,7 @@ export default function GroupRoomPanel({ view }: { view: GroupCallView }) {
   const connected = state === ConnectionState.Connected;
   const video = call.media === 'video';
   const status = connected
-    ? `${participants.length} en la llamada`
+    ? `${participants.length}/${MAX_GROUP_CALL_PARTICIPANTS} en la llamada`
     : state === ConnectionState.Reconnecting ||
         state === ConnectionState.SignalReconnecting
       ? 'Reconectando…'

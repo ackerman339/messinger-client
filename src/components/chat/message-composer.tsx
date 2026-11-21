@@ -178,7 +178,7 @@ export function MessageComposer() {
 
             <textarea
               ref={textareaRef}
-              className='block w-full resize-none bg-transparent text-[15px] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
+              className='block w-full resize-none bg-transparent text-[0.9375rem] leading-6 text-text-primary outline-none placeholder:text-text-secondary disabled:opacity-50'
               placeholder='Escribe un mensaje'
               rows={1}
               disabled={disabled || isLoadingAttachment}

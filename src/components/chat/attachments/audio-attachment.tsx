@@ -303,7 +303,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
         )}
       </button>
 
-      <span className='w-8 shrink-0 text-[11px] text-text-secondary'>
+      <span className='w-8 shrink-0 text-[0.6875rem] text-text-secondary'>
         {formatTime(timeline.currentTime)}
       </span>
 
@@ -319,7 +319,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
         aria-label='Progreso del audio'
       />
 
-      <span className='w-8 shrink-0 text-[11px] text-text-secondary'>
+      <span className='w-8 shrink-0 text-[0.6875rem] text-text-secondary'>
         {timeline.duration ? formatTime(timeline.duration) : '–:–'}
       </span>
     </div>

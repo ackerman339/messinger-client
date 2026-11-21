@@ -84,7 +84,7 @@ export function LocationMap({ point, eager = false }: { point: LocationPoint; ea
     <div className='relative h-36 w-full overflow-hidden rounded-lg bg-bg-app'>
       <div
         ref={container}
-        className='h-full w-full [&_.leaflet-control-attribution]:text-[11px]'
+        className='h-full w-full [&_.leaflet-control-attribution]:text-[0.6875rem]'
         aria-label='Mapa de la ubicación'
       />
       {!loaded && (

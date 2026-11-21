@@ -29,7 +29,7 @@ function nodes(node) {
   if (Array.isArray(node)) return node.flatMap(nodes);
   return [node, ...nodes(node.props?.children)];
 }
-function fixture(ids, messages, activeConversation = { id: 'chat' }) {
+function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = new Map()) {
   const copied = [],
     deleted = [],
     updates = [];
@@ -67,6 +67,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }) {
         };
       if (name.includes('user-context'))
         return { useUserContext: () => ({ user: { id: 'me', username: 'Lucía' } }) };
+      if (name.includes('contacts-context')) return { useContactsContext: () => ({ contacts }) };
       if (name.includes('chat-context'))
         return {
           useChatContext: () => ({ activeConversation }),
@@ -256,6 +257,22 @@ test('group bubbles display the current sender name and use known members for ol
     const tree = bubble({ message, selected: false, onSelect() {} });
     assert.ok(nodes(tree).some((node) => node.props?.children === name));
   }
+});
+
+test('a saved name takes priority over the group member username', () => {
+  const group = {
+    id: 'chat',
+    type: 'GROUP',
+    members: [{ userId: 'other', username: 'Camila' }],
+  };
+  const contacts = new Map([['other', { name: 'Cami' }]]);
+  const { bubble } = fixture([], [], group, contacts);
+  const render = () => nodes(bubble({ message: received, selected: false, onSelect() {} }))
+    .map((node) => node.props?.children);
+  assert.ok(render().includes('Cami'));
+  assert.ok(!render().includes('Camila'));
+  contacts.delete('other');
+  assert.ok(render().includes('Camila'));
 });
 
 test('private bubbles use the message content without adding a sender label', () => {

@@ -28,10 +28,13 @@ function load(file, dependencies = {}) {
   );
   return module.exports;
 }
+const groupLimits = load('lib/group-limits.ts');
+
 function service(
   bootstrap = async () => ({ page: [], nextCursor: null }),
 ) {
   return load('services/groups.ts', {
+    '@/lib/group-limits': groupLimits,
     './conversation': { conversationService: { getBootstrap: bootstrap } },
     '@/clients/websocket-client': { wsClient: {} },
   });
@@ -229,6 +232,7 @@ test('multi-select sends each selected invitation and preserves failed selection
   const h = hooks([[], ['a', 'b'], [], false, false, '', '', 0]);
   const calls = [];
   const tree = load('components/chat/invite-group-dialog.tsx', {
+    '@/lib/group-limits': groupLimits,
     react: h.react,
     '@/context/user-context': {
       useUserContext: () => ({ user: { id: 'me' } }),
@@ -243,7 +247,7 @@ test('multi-select sends each selected invitation and preserves failed selection
       groupError: (error) => error.message,
     },
   }).InviteGroupDialog({
-    group: { id: 'g', name: 'Equipo' },
+    group: { id: 'g', name: 'Equipo', members: [] },
     onClose() {},
   });
   const button = nodes(tree)

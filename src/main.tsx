@@ -4,6 +4,9 @@ import './register-sw.ts';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
+import { applyTextSize } from './services/text-size';
+
+applyTextSize();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

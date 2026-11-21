@@ -79,10 +79,10 @@ export function ConversationEventMessage({
             <Icon size={23} aria-hidden='true' />
           </div>
           <div className='min-w-0 flex-1'>
-            <p className='text-[15px] leading-5 font-semibold text-text-primary'>
+            <p className='text-[0.9375rem] leading-5 font-semibold text-text-primary'>
               {video ? 'Videollamada' : 'Llamada de voz'}
             </p>
-            <div className='mt-1 flex items-center gap-1 text-[13px] text-text-secondary'>
+            <div className='mt-1 flex items-center gap-1 text-[0.8125rem] text-text-secondary'>
               <Direction
                 size={14}
                 aria-hidden='true'
@@ -94,7 +94,7 @@ export function ConversationEventMessage({
         </div>
         <time
           dateTime={message.createdAt}
-          className='mt-1 block text-right text-[11px] text-text-secondary'
+          className='mt-1 block text-right text-[0.6875rem] text-text-secondary'
         >
           {format(new Date(message.createdAt), 'dd MMM hh:mm a')}
         </time>

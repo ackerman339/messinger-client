@@ -206,7 +206,7 @@ export function CallHistoryRow({
       </div>
       <div className='min-w-0 flex-1'>
         <p
-          className={`truncate text-[15px] font-semibold ${details.unsuccessful ? 'text-danger' : 'text-text-primary'}`}
+          className={`truncate text-[0.9375rem] font-semibold ${details.unsuccessful ? 'text-danger' : 'text-text-primary'}`}
         >
           {details.name}
         </p>
@@ -221,7 +221,7 @@ export function CallHistoryRow({
         </p>
       </div>
       <div className='flex flex-col items-end gap-1.5 text-text-secondary'>
-        <time dateTime={call.createdAt} className='text-[11px]'>
+        <time dateTime={call.createdAt} className='text-[0.6875rem]'>
           {format(new Date(call.createdAt), 'HH:mm')}
         </time>
         <Icon

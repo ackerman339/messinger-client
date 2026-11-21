@@ -25,6 +25,7 @@ import { MessageStatus, WS_SERVER_EVENTS } from '@/types/websocket';
 import { conversationService } from '@/services/conversation';
 import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
+import { useContactsContext } from '@/context/contacts-context';
 import { useCursorPagination } from '@/hooks/use-cursor-pagination';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
 import { MessageSelectionBar } from '@/components/chat/messages-selection-bar';
@@ -477,6 +478,7 @@ type MessageBubbleProps = {
 function MessageBubble({ message, status, selected, onSelect, locationUpdate }: MessageBubbleProps) {
   const { user } = useUserContext();
   const { activeConversation, conversations } = useChatContext();
+  const { contacts } = useContactsContext();
 
   const bubbleRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -529,7 +531,8 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
   const isOwn = message.senderId === user?.id;
   const senderName =
     activeConversation?.type === 'GROUP'
-      ? activeConversation.members
+      ? contacts.get(message.senderId)?.name?.trim() ||
+        activeConversation.members
           .find((member) => member.userId === message.senderId)
           ?.username?.trim() ||
         activeConversation.knownMembers
@@ -580,7 +583,7 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
             onStop={isOwn && !activeConversation?.isDeleted && message.localStatus !== 'FAILED' ? stopLocation : undefined}
           />
         ) : (
-          <p className='whitespace-pre-wrap wrap-break-word text-[15px] leading-5'>
+          <p className='whitespace-pre-wrap wrap-break-word text-[0.9375rem] leading-5'>
             {/^https?:\/\/\S+$/.test(message.content.trim()) ? (
               <a
                 href={message.content.trim()}
@@ -615,7 +618,7 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
           </ul>
         )}
 
-        <div className='mt-1 flex items-center justify-end gap-1 text-[11px] text-text-secondary'>
+        <div className='mt-1 flex items-center justify-end gap-1 text-[0.6875rem] text-text-secondary'>
           <time>
             {format(new Date(message.createdAt), 'dd MMM hh:mm a', {
               locale: es,

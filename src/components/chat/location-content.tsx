@@ -33,7 +33,7 @@ export function LocationContent({
         <ExternalLink size={15} aria-hidden='true' />
       </span>
       {location.expiresAt && !pending && (
-        <p className='text-[11px] text-text-secondary'>
+        <p className='text-[0.6875rem] text-text-secondary'>
           Última posición ·{' '}
           {new Date(location.capturedAt).toLocaleTimeString([], {
             hour: '2-digit',

@@ -1,3 +1,4 @@
+import { GROUP_MEMBER_LIMIT_MESSAGE } from '@/lib/group-limits';
 import { conversationService } from './conversation';
 import { wsClient } from '@/clients/websocket-client';
 import type { Conversation, Member } from '@/types/conversation';
@@ -84,6 +85,7 @@ export function inviteCandidates(
 
 export function groupError(error: unknown): string {
   const message = error instanceof Error ? error.message : '';
+  if (message === 'GROUP:MEMBER_LIMIT') return GROUP_MEMBER_LIMIT_MESSAGE;
   if (message.includes('EXPIRED'))
     return 'La invitación ha vencido. Pide una nueva al propietario.';
   if (message.includes('NOT_FOUND'))

@@ -4,6 +4,10 @@ body,
   min-height: 100%;
 }
 
+html {
+  font-size: calc(100% * var(--text-scale, 1));
+}
+
 body {
   margin: 0;
   background: var(--color-bg-chat);

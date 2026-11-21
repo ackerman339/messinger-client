@@ -53,7 +53,7 @@ export function CallPanel() {
                   <span className='size-1 rounded-full bg-accent' />
                   messinger
                 </span>
-                <span className='flex items-center gap-1.5 text-[11px] text-text-secondary group-data-[video=true]/call:text-bg-app/80'>
+                <span className='flex items-center gap-1.5 text-[0.6875rem] text-text-secondary group-data-[video=true]/call:text-bg-app/80'>
                   {call.media === 'video' ? <Video size={15} /> : <Phone size={14} />}
                   {call.media === 'video' ? 'Videollamada' : 'Llamada de voz'}
                 </span>
@@ -61,14 +61,14 @@ export function CallPanel() {
 
               <div className='z-1 px-7 pt-11 text-center group-data-[video=true]/call:pt-6 max-[481px]:pt-15 min-[481px]:[@media(max-height:650px)]:pt-6'>
                 <Dialog.Title asChild>
-                  <h2 className='text-[31px] leading-tight font-medium tracking-[-0.8px] wrap:anywhere'>
+                  <h2 className='text-[1.9375rem] leading-tight font-medium tracking-[-0.8px] wrap:anywhere'>
                     {participantName}
                   </h2>
                 </Dialog.Title>
                 <Dialog.Description asChild>
                   <p
                     role='status'
-                    className='mt-2.5 text-[15px] text-text-secondary tabular-nums group-data-[video=true]/call:text-bg-app/80'
+                    className='mt-2.5 text-[0.9375rem] text-text-secondary tabular-nums group-data-[video=true]/call:text-bg-app/80'
                   >
                     {call.status === 'connected' ? duration : statusLabel}
                   </p>
@@ -82,7 +82,7 @@ export function CallPanel() {
                     className={`
                 relative grid size-34 place-items-center rounded-full
                 bg-[linear-gradient(135deg,color-mix(in_srgb,var(--color-accent)_18%,var(--color-bg-app)),color-mix(in_srgb,var(--color-accent)_38%,var(--color-bg-app)))]
-                text-[46px] font-normal text-accent-ink
+                text-[2.875rem] font-normal text-accent-ink
                 shadow-[0_0_0_14px_color-mix(in_srgb,var(--color-accent)_6%,transparent),0_0_0_29px_color-mix(in_srgb,var(--color-accent)_3%,transparent)]
                 data-[ringing=true]:after:absolute data-[ringing=true]:after:-inset-3.75
                 data-[ringing=true]:after:animate-call-ring data-[ringing=true]:after:rounded-full
@@ -112,7 +112,7 @@ export function CallPanel() {
                     <CallStream stream={call.local} muted />
                   )}
                   {!call.cameraOff && (
-                    <span className='absolute bottom-0.5 left-1 rounded-[10px] bg-bg-app/85 p-2 text-[11px]'>
+                    <span className='absolute bottom-0.5 left-1 rounded-[10px] bg-bg-app/85 p-2 text-[0.6875rem]'>
                       Tú
                     </span>
                   )}
@@ -121,22 +121,22 @@ export function CallPanel() {
 
               <footer className='z-2 mt-auto px-6 pt-5 pb-7.5 text-center group-data-[video=true]/call:pt-70 max-[481px]:pb-[max(32px,env(safe-area-inset-bottom))]'>
                 {call.notice && (
-                  <p className='mb-4.5 text-[13px] leading-normal text-text-secondary group-data-[video=true]/call:text-bg-app/80'>
+                  <p className='mb-4.5 text-[0.8125rem] leading-normal text-text-secondary group-data-[video=true]/call:text-bg-app/80'>
                     {call.notice}
                   </p>
                 )}
                 {call.error && (
-                  <p role='alert' className='mb-4.5 text-[13px] leading-normal text-danger'>
+                  <p role='alert' className='mb-4.5 text-[0.8125rem] leading-normal text-danger'>
                     {call.error}
                   </p>
                 )}
                 {call.deviceError && (
-                  <p role='alert' className='mb-4.5 text-[13px] leading-normal text-danger'>
+                  <p role='alert' className='mb-4.5 text-[0.8125rem] leading-normal text-danger'>
                     {call.deviceError}
                   </p>
                 )}
                 {model.audioOutput.error && (
-                  <p role='alert' className='mb-4.5 text-[13px] leading-normal text-danger'>
+                  <p role='alert' className='mb-4.5 text-[0.8125rem] leading-normal text-danger'>
                     {model.audioOutput.error}
                   </p>
                 )}
