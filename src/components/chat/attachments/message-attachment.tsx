@@ -21,7 +21,7 @@ export function MessageAttachment({ attachment }: MessageAttachmentProps) {
   }
 
   if (contentType.startsWith('audio/')) {
-    return <AudioAttachment attachmentId={id} fileName={fileName} />;
+    return <AudioAttachment attachmentId={id} fileName={fileName} contentType={contentType} />;
   }
 
   return <FileAttachment attachmentId={id} fileName={fileName} contentType={contentType} />;

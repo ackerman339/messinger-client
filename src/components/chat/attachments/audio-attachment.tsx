@@ -1,201 +1,233 @@
-import { useEffect, useRef, useState } from 'react';
-import { Pause, Play, LoaderCircle } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { LoaderCircle, Pause, Play } from 'lucide-react';
 import { fileService } from '@/services/files';
 
 type AudioAttachmentProps = {
   attachmentId: string;
   fileName: string;
+  contentType: string;
 };
 
-export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps) {
+type LocalAudioSource = { controller: AbortController; url?: string };
+
+const initialTimeline = { currentTime: 0, duration: 0, canSeek: false };
+
+function finiteTime(value: number) {
+  return Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function formatTime(value: number) {
+  const seconds = Math.floor(value);
+  return `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`;
+}
+
+async function playAudio(audio: HTMLAudioElement) {
+  const controller = new AbortController();
+  try {
+    // A media error can also arrive while play() is still waiting for data.
+    await new Promise<void>((resolve, reject) => {
+      audio.addEventListener('error', () => reject(audio.error), { signal: controller.signal });
+      audio.play().then(resolve, reject);
+    });
+  } finally {
+    controller.abort();
+  }
+}
+
+function wasPlaybackInterrupted(error: unknown) {
+  return (
+    error instanceof DOMException &&
+    (error.name === 'AbortError' || error.name === 'NotAllowedError')
+  );
+}
+
+export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAttachmentProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
-
+  const finished = useRef(false);
+  const localSource = useRef<LocalAudioSource | null>(null);
   const [url, setUrl] = useState<string | null>(null);
-
+  const [attempt, setAttempt] = useState(0);
   const [isLoadingUrl, setIsLoadingUrl] = useState(true);
   const [isBuffering, setIsBuffering] = useState(false);
-  const [error, setError] = useState(false);
-
   const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const [error, setError] = useState('');
+  const [timeline, setTimeline] = useState(initialTimeline);
 
-  /**
-   * Obtiene la URL del archivo.
-   */
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
         setIsLoadingUrl(true);
-        setError(false);
+        setError('');
+        setIsPlaying(false);
+        setIsBuffering(false);
+        finished.current = false;
+        setTimeline(initialTimeline);
+        const result = await fileService.downloadFile({ attachmentId });
 
-        const result = await fileService.downloadFile({
-          attachmentId,
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        setUrl(result.url);
+        if (!cancelled) setUrl(result.url);
       } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error('[audio] failed to get URL:', error);
-        setError(true);
-      } finally {
         if (!cancelled) {
-          setIsLoadingUrl(false);
+          console.error('[audio] failed to get URL:', error);
+          setError('No se pudo cargar el audio');
         }
+      } finally {
+        if (!cancelled) setIsLoadingUrl(false);
       }
     }
 
-    load();
-
+    void load();
     return () => {
       cancelled = true;
+      const source = localSource.current;
+      localSource.current = null;
+      source?.controller.abort();
+      if (source?.url) URL.revokeObjectURL(source.url);
     };
-  }, [attachmentId]);
+  }, [attachmentId, attempt]);
 
-  /**
-   * Configura los eventos del elemento audio.
-   */
+  const syncTimeline = useCallback((audio: HTMLAudioElement, ended = audio.ended) => {
+    const currentTime = finiteTime(audio.currentTime);
+    const metadataDuration = finiteTime(audio.duration);
+    const seekable = audio.seekable;
+    const start = seekable.length ? seekable.start(0) : 0;
+    const seekableEnd = seekable.length ? finiteTime(seekable.end(seekable.length - 1)) : 0;
+
+    setTimeline((previous) => {
+      const observedDuration = ended
+        ? currentTime || previous.duration
+        : Math.max(previous.duration, seekableEnd);
+      const duration = metadataDuration || observedDuration;
+      return {
+        currentTime: ended ? duration : duration ? Math.min(currentTime, duration) : currentTime,
+        duration,
+        canSeek: seekableEnd > start,
+      };
+    });
+  }, []);
+
   useEffect(() => {
     const audio = audioRef.current;
+    if (!audio || isLoadingUrl || error || typeof OfflineAudioContext === 'undefined') return;
 
-    if (!audio) {
-      return;
+    const controller = new AbortController();
+    function cancelIfDurationKnown() {
+      if (audio && (finiteTime(audio.duration) || (audio.ended && finiteTime(audio.currentTime)))) {
+        controller.abort();
+        syncTimeline(audio);
+      }
     }
+    audio.addEventListener('durationchange', cancelIfDurationKnown);
+    audio.addEventListener('ended', cancelIfDurationKnown);
 
-    function handleLoadedMetadata() {
-      setDuration(audio!.duration);
-    }
+    const timeout = setTimeout(async () => {
+      cancelIfDurationKnown();
+      if (controller.signal.aborted) return;
 
-    function handleTimeUpdate() {
-      setCurrentTime(audio!.currentTime);
-    }
+      try {
+        const bytes = await fileService.downloadAudioBytes(attachmentId, controller.signal);
+        if (controller.signal.aborted) return;
 
-    function handlePlay() {
-      setIsPlaying(true);
-      setIsBuffering(false);
-    }
+        // Some recorded files omit the duration from their headers.
+        const decoded = await new OfflineAudioContext(1, 1, 16000).decodeAudioData(bytes);
+        cancelIfDurationKnown();
+        if (controller.signal.aborted || audioRef.current !== audio) return;
 
-    function handlePlaying() {
-      setIsPlaying(true);
-      setIsBuffering(false);
-    }
-
-    function handlePause() {
-      setIsPlaying(false);
-      setIsBuffering(false);
-    }
-
-    function handleWaiting() {
-      setIsBuffering(true);
-    }
-
-    function handleCanPlay() {
-      setIsBuffering(false);
-    }
-
-    function handleEnded() {
-      setIsPlaying(false);
-      setIsBuffering(false);
-      setCurrentTime(0);
-    }
-
-    function handleError() {
-      console.error('[audio] media error:', audio!.error);
-
-      setIsPlaying(false);
-      setIsBuffering(false);
-      setError(true);
-    }
-
-    audio.addEventListener('loadedmetadata', handleLoadedMetadata);
-    audio.addEventListener('timeupdate', handleTimeUpdate);
-
-    audio.addEventListener('play', handlePlay);
-    audio.addEventListener('playing', handlePlaying);
-    audio.addEventListener('pause', handlePause);
-
-    audio.addEventListener('waiting', handleWaiting);
-    audio.addEventListener('canplay', handleCanPlay);
-
-    audio.addEventListener('ended', handleEnded);
-    audio.addEventListener('error', handleError);
+        const duration = finiteTime(decoded.duration);
+        if (!duration) return;
+        const ended = audio.ended;
+        setTimeline((previous) => ({
+          ...previous,
+          duration,
+          currentTime: ended ? duration : Math.min(previous.currentTime, duration),
+        }));
+      } catch {
+        // Native playback can still report the duration later.
+      }
+    }, 500);
 
     return () => {
-      audio.removeEventListener('loadedmetadata', handleLoadedMetadata);
-      audio.removeEventListener('timeupdate', handleTimeUpdate);
-
-      audio.removeEventListener('play', handlePlay);
-      audio.removeEventListener('playing', handlePlaying);
-      audio.removeEventListener('pause', handlePause);
-
-      audio.removeEventListener('waiting', handleWaiting);
-      audio.removeEventListener('canplay', handleCanPlay);
-
-      audio.removeEventListener('ended', handleEnded);
-      audio.removeEventListener('error', handleError);
+      clearTimeout(timeout);
+      controller.abort();
+      audio.removeEventListener('durationchange', cancelIfDurationKnown);
+      audio.removeEventListener('ended', cancelIfDurationKnown);
     };
-  }, [url]);
+  }, [attachmentId, error, isLoadingUrl, syncTimeline, url]);
+
+  function finishPlayback() {
+    setIsPlaying(false);
+    setIsBuffering(false);
+  }
+
+  function handlePlaybackError(error: unknown) {
+    console.error('[audio] failed to play:', error);
+    finishPlayback();
+    setError('No se pudo reproducir el audio');
+  }
 
   async function togglePlay() {
     const audio = audioRef.current;
+    if (!audio || (localSource.current && !localSource.current.url)) return;
 
-    if (!audio) {
-      return;
-    }
-
-    if (!audio.paused) {
+    const duration = finiteTime(audio.duration);
+    const atEnd =
+      finished.current || audio.ended || (duration > 0 && audio.currentTime >= duration);
+    if (!audio.paused && !atEnd && !audio.error) {
       audio.pause();
       return;
     }
 
     try {
+      if (atEnd) {
+        // Reopen the media at its start, including recordings that Chrome cannot rewind.
+        finished.current = false;
+        audio.load();
+        setTimeline((previous) => ({ ...previous, currentTime: 0 }));
+      }
+
       setIsBuffering(true);
+      try {
+        if (audio.error) throw audio.error;
+        await playAudio(audio);
+      } catch (error) {
+        if (audioRef.current !== audio || wasPlaybackInterrupted(error)) return;
+        if (localSource.current) throw error;
 
-      await audio.play();
+        // Use the complete file if the browser cannot play the signed R2 response.
+        const controller = new AbortController();
+        const source: LocalAudioSource = { controller };
+        localSource.current = source;
+        setIsBuffering(true);
+        const bytes = await fileService.downloadAudioBytes(attachmentId, controller.signal);
+        if (controller.signal.aborted || audioRef.current !== audio) return;
+
+        const mimeType = contentType.split(';')[0].trim().toLowerCase();
+        const type = mimeType === 'audio/m4a' || mimeType === 'audio/x-m4a' ? 'audio/mp4' : mimeType;
+        source.url = URL.createObjectURL(new Blob([bytes], { type }));
+        audio.src = source.url;
+        setTimeline((previous) => ({ ...previous, currentTime: 0, canSeek: false }));
+        await playAudio(audio);
+      }
     } catch (error) {
-      setIsBuffering(false);
-
-      console.error('[audio] failed to play:', error);
+      if (audioRef.current !== audio) return;
+      if (!wasPlaybackInterrupted(error)) handlePlaybackError(error);
+    } finally {
+      if (audioRef.current === audio) setIsBuffering(false);
     }
   }
 
-  function handleSeek(event: React.ChangeEvent<HTMLInputElement>) {
+  function handleSeek(event: ChangeEvent<HTMLInputElement>) {
     const audio = audioRef.current;
+    const time = event.currentTarget.valueAsNumber;
+    if (!audio?.seekable.length || !Number.isFinite(time)) return;
 
-    if (!audio) {
-      return;
-    }
-
-    const time = Number(event.target.value);
-
-    if (!Number.isFinite(time)) {
-      return;
-    }
-
-    audio.currentTime = time;
-    setCurrentTime(time);
-  }
-
-  function formatTime(value: number) {
-    if (!Number.isFinite(value) || value < 0) {
-      return '0:00';
-    }
-
-    const totalSeconds = Math.floor(value);
-
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    const start = audio.seekable.start(0);
+    const end = audio.seekable.end(audio.seekable.length - 1);
+    finished.current = false;
+    audio.currentTime = Math.min(end, Math.max(start, time));
+    syncTimeline(audio);
   }
 
   if (isLoadingUrl) {
@@ -208,24 +240,61 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
 
   if (error || !url) {
     return (
-      <div className='flex h-12 w-72 items-center justify-center rounded-lg bg-slate-100 text-sm text-text-secondary'>
-        No se pudo cargar el audio
+      <div className='flex min-h-12 w-72 max-w-full flex-wrap items-center justify-center gap-2 rounded-lg bg-slate-100 px-2 py-1 text-sm text-text-secondary'>
+        <span role='status'>{error || 'No se pudo cargar el audio'}</span>
+        <button
+          type='button'
+          className='cursor-pointer font-medium text-accent-ink hover:underline'
+          onClick={() => {
+            setIsLoadingUrl(true);
+            setAttempt((previous) => previous + 1);
+          }}
+        >
+          Reintentar
+        </button>
       </div>
     );
   }
 
   return (
     <div className='flex h-12 w-72 max-w-full items-center gap-2 rounded-lg bg-slate-100 px-2'>
-      <audio ref={audioRef} src={url} preload='auto' className='hidden' aria-label={fileName} />
+      <audio
+        ref={audioRef}
+        src={url}
+        preload='auto'
+        loop={false}
+        className='hidden'
+        aria-label={fileName}
+        onLoadedMetadata={({ currentTarget }) => syncTimeline(currentTarget)}
+        onDurationChange={({ currentTarget }) => syncTimeline(currentTarget)}
+        onProgress={({ currentTarget }) => syncTimeline(currentTarget)}
+        onTimeUpdate={({ currentTarget }) => syncTimeline(currentTarget)}
+        onPlay={() => setIsPlaying(true)}
+        onPlaying={() => setIsBuffering(false)}
+        onPause={finishPlayback}
+        onWaiting={({ currentTarget }) => {
+          if (!currentTarget.paused && !currentTarget.ended) setIsBuffering(true);
+        }}
+        onCanPlay={({ currentTarget }) => {
+          setIsBuffering(false);
+          syncTimeline(currentTarget);
+        }}
+        onEnded={({ currentTarget }) => {
+          finished.current = true;
+          finishPlayback();
+          syncTimeline(currentTarget, true);
+        }}
+        onError={finishPlayback}
+      />
 
       <button
         type='button'
         onClick={togglePlay}
-        disabled={isBuffering}
+        disabled={isBuffering && !isPlaying}
         className='grid size-9 shrink-0 place-items-center rounded-full bg-accent text-white transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70 cursor-pointer'
         aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
       >
-        {isBuffering ? (
+        {isBuffering && !isPlaying ? (
           <LoaderCircle size={17} className='animate-spin' />
         ) : isPlaying ? (
           <Pause size={17} fill='currentColor' />
@@ -235,22 +304,24 @@ export function AudioAttachment({ attachmentId, fileName }: AudioAttachmentProps
       </button>
 
       <span className='w-8 shrink-0 text-[11px] text-text-secondary'>
-        {formatTime(currentTime)}
+        {formatTime(timeline.currentTime)}
       </span>
 
       <input
         type='range'
         min={0}
-        max={duration || 0}
-        step={0.01}
-        value={currentTime}
+        max={timeline.duration}
+        step='any'
+        value={timeline.duration ? timeline.currentTime : 0}
         onChange={handleSeek}
-        disabled={!duration}
-        className='h-1 min-w-0 flex-1 cursor-pointer accent-accent'
+        disabled={!timeline.duration || !timeline.canSeek}
+        className='h-1 min-w-0 flex-1 cursor-pointer accent-accent disabled:cursor-default'
         aria-label='Progreso del audio'
       />
 
-      <span className='w-8 shrink-0 text-[11px] text-text-secondary'>{formatTime(duration)}</span>
+      <span className='w-8 shrink-0 text-[11px] text-text-secondary'>
+        {timeline.duration ? formatTime(timeline.duration) : '–:–'}
+      </span>
     </div>
   );
 }

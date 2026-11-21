@@ -29,6 +29,15 @@ export const fileService = {
     return response.data.result;
   },
 
+  downloadAudioBytes: async (attachmentId: string, signal: AbortSignal) => {
+    const response = await httpClient.get<ArrayBuffer>('/download', {
+      params: { attachmentId, format: 'audio-bytes' },
+      responseType: 'arraybuffer',
+      signal,
+    });
+    return response.data;
+  },
+
   downloadFile: async (params: DownloadDto) => {
     const response = await httpClient.get<ApiResponse<DownloadResponse>>('/download', { params });
 
