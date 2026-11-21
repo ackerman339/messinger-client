@@ -25,7 +25,7 @@ type Notice = { title: string; description: string; error?: boolean };
 export function HeaderButton() {
   const { user } = useUserContext();
   const { contacts, status } = useContactsContext();
-  const { activeConversation, handleEmptyChat } = useChatContext();
+  const { activeConversation, handleEmptyChat, handleRemoveConversation } = useChatContext();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
@@ -35,6 +35,7 @@ export function HeaderButton() {
     'delete' | 'transfer' | 'leave' | null
   >(null);
   const [addContactOpen, setAddContactOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const pending = useRef(false);
   const groupMember = activeConversation?.members.find(
     (member) => member.userId === user?.id && !member.softDeletedAt,
@@ -95,6 +96,28 @@ export function HeaderButton() {
     } catch {
       setNotice({
         title: 'No se pudo vaciar el chat',
+        description: 'Inténtalo de nuevo.',
+        error: true,
+      });
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteConversation() {
+    if (pending.current || activeConversation?.type !== 'PRIVATE') return;
+    const conversationId = activeConversation.id;
+    pending.current = true;
+    setBusy(true);
+    setConfirmDelete(false);
+    setNotice(null);
+    try {
+      await conversationService.deletePrivateConversation({ conversationId });
+      handleRemoveConversation(conversationId);
+    } catch {
+      setNotice({
+        title: 'No se pudo eliminar la conversación',
         description: 'Inténtalo de nuevo.',
         error: true,
       });
@@ -227,6 +250,20 @@ export function HeaderButton() {
               <BrushCleaning size={18} />
               <span>Vaciar chat</span>
             </DropdownMenu.Item>
+            {activeConversation.type === 'PRIVATE' && (
+              <DropdownMenu.Item
+                disabled={busy}
+                aria-label='Eliminar conversación'
+                onSelect={() => {
+                  setOpen(false);
+                  setConfirmDelete(true);
+                }}
+                className='flex cursor-pointer items-center gap-3 rounded-md px-3 py-2 text-sm text-danger outline-none hover:bg-red-50 data-[disabled]:opacity-40'
+              >
+                <Trash2 size={18} />
+                <span>Eliminar conversación</span>
+              </DropdownMenu.Item>
+            )}
             {isActiveGroup &&
               (isOwner
                 ? renderGroupAction('delete')
@@ -295,6 +332,39 @@ export function HeaderButton() {
           </AlertDialog.Content>
         </AlertDialog.Portal>
       </AlertDialog.Root>
+      {activeConversation.type === 'PRIVATE' && (
+        <AlertDialog.Root open={confirmDelete} onOpenChange={setConfirmDelete}>
+          <AlertDialog.Portal>
+            <AlertDialog.Overlay className='fixed inset-0 z-60 bg-black/40' />
+            <AlertDialog.Content className='fixed left-1/2 top-1/2 z-70 w-[min(92vw,400px)] -translate-x-1/2 -translate-y-1/2 rounded-xl bg-bg-app p-5 shadow-xl'>
+              <AlertDialog.Title className='text-lg font-semibold'>
+                ¿Eliminar conversación?
+              </AlertDialog.Title>
+              <AlertDialog.Description className='mt-2 text-sm text-text-secondary'>
+                La conversación desaparecerá de tu lista.
+              </AlertDialog.Description>
+              <div className='mt-5 flex justify-end gap-2'>
+                <AlertDialog.Cancel asChild>
+                  <button type='button' className='cursor-pointer rounded-lg px-4 py-2 text-sm hover:bg-slate-100'>
+                    Cancelar
+                  </button>
+                </AlertDialog.Cancel>
+                <AlertDialog.Action asChild>
+                  <button
+                    type='button'
+                    disabled={busy}
+                    aria-label='Confirmar eliminación de conversación'
+                    onClick={handleDeleteConversation}
+                    className='cursor-pointer rounded-lg bg-danger px-4 py-2 text-sm font-medium text-white hover:bg-danger-hover disabled:opacity-50'
+                  >
+                    Eliminar
+                  </button>
+                </AlertDialog.Action>
+              </div>
+            </AlertDialog.Content>
+          </AlertDialog.Portal>
+        </AlertDialog.Root>
+      )}
       {notice && (
         <div
           role={notice.error ? 'alert' : 'status'}

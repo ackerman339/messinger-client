@@ -29,10 +29,13 @@ function fixture({
   contacts = new Map(),
   empty = async () => {},
   request = async () => {},
+  deleteConversation = async () => {},
 } = {}) {
   const requests = [],
     emptied = [],
     cleared = [],
+    deletionRequests = [],
+    removed = [],
     notices = [],
     state = [];
   const conversation = {
@@ -67,6 +70,7 @@ function fixture({
       useChatContext: () => ({
         activeConversation: conversation,
         handleEmptyChat: (id) => cleared.push(id),
+        handleRemoveConversation: (id) => removed.push(id),
       }),
     },
     '@/context/user-context': {
@@ -77,6 +81,10 @@ function fixture({
         requestUserConnection: async (data) => {
           requests.push(data);
           await request();
+        },
+        deletePrivateConversation: async (data) => {
+          deletionRequests.push(data);
+          await deleteConversation();
         },
         emptyMessages: async (data) => {
           emptied.push(data);
@@ -103,6 +111,8 @@ function fixture({
     requests,
     emptied,
     cleared,
+    deletionRequests,
+    removed,
     notices,
     state,
     conversation,
@@ -228,4 +238,16 @@ test('only private conversations with an unsaved participant offer adding a cont
   const contacts = new Map([['bob', { userId: 'bob' }]]);
   const saved = fixture({ contacts });
   assert.equal(saved.action('Agregar como contacto'), undefined);
+});
+
+
+test('private chat deletion requires confirmation and a successful API response', async () => {
+  const f = fixture();
+  f.action('Eliminar conversación')();
+  assert.deepEqual(f.deletionRequests, []);
+  assert.deepEqual(f.removed, []);
+  await f.action('Confirmar eliminación de conversación')();
+  assert.deepEqual(f.deletionRequests, [{ conversationId: 'chat' }]);
+  assert.deepEqual(f.removed, ['chat']);
+  assert.equal(fixture({ type: 'GROUP' }).action('Eliminar conversación'), undefined);
 });

@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { clientsClaim } from 'workbox-core';
-import { precacheAndRoute } from 'workbox-precaching';
+import { matchPrecache, precacheAndRoute } from 'workbox-precaching';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -9,6 +9,21 @@ self.skipWaiting();
 clientsClaim();
 
 precacheAndRoute(self.__WB_MANIFEST);
+
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode !== 'navigate') return;
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || !/^\/(chat|sign-in|sign-up)\/?$/.test(url.pathname)) return;
+  event.respondWith((async () => {
+    try {
+      const response = await fetch(event.request);
+      if (response.status < 500) return response;
+      return (await matchPrecache('/index.html')) ?? response;
+    } catch {
+      return (await matchPrecache('/index.html')) ?? Response.error();
+    }
+  })());
+});
 
 self.addEventListener('push', (event) => {
   if (!event.data) {

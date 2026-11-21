@@ -36,6 +36,13 @@ const contactTypesCode = ts.transpileModule(contactTypesSource, {
 const contactTypes = { exports: {} };
 new Function('exports', contactTypesCode)(contactTypes.exports);
 
+const listStateSource = fs.readFileSync(new URL('../services/conversation-list-state.ts', import.meta.url), 'utf8');
+const listStateCode = ts.transpileModule(listStateSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2023 },
+}).outputText;
+const listState = { exports: {} };
+new Function('exports', listStateCode)(listState.exports);
+
 function Calls() {
   return React.createElement('section', null, 'calls fixture');
 }
@@ -86,6 +93,7 @@ function fixture({ conversations = [], contacts = new Map() } = {}) {
       return { ChatMenu: () => React.createElement('button', null, 'Menu') };
     if (name.includes('contacts-context')) return { useContactsContext: () => ({ contacts }) };
     if (name.endsWith('/types/contact')) return contactTypes.exports;
+    if (name.endsWith('/services/conversation-list-state')) return listState.exports;
     if (name.includes('chat-context')) return { useChatContext: () => context };
     if (name.includes('user-context'))
       return { useUserContext: () => ({ user: { id: 'alice' } }) };

@@ -19,7 +19,7 @@ export type Message = {
   localStatus?: 'PENDING' | 'FAILED';
   id: string;
   messageId: string;
-  conversation: Conversation;
+  conversation?: Conversation;
   senderId: string;
   content: string;
   createdAt: string;

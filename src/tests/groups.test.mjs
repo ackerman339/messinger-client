@@ -381,6 +381,7 @@ test('the provider adds incoming invitations as pending conversations and remove
     ...h.react,
     useEffect: (effect) => effects.push(effect),
     useMemo: (callback) => callback(),
+    useCallback: (callback) => callback,
   };
   const { ChatProvider } = load('providers/chat-provider.tsx', {
     react: { ...react, useSyncExternalStore: (_subscribe, getSnapshot) => getSnapshot() },
@@ -396,9 +397,14 @@ test('the provider adds incoming invitations as pending conversations and remove
     '@services/files': { fileService: {} },
     '@services/user': { userService: {} },
     '@/services/groups': service(),
-    '@/hooks/use-cursor-pagination': {
-      useCursorPagination: () => ({ items: [] }),
+    '@/hooks/use-cached-list': {
+      useCachedList() {
+        const [records, setRecords] = h.react.useState(new Map());
+        return { records, setRecords };
+      },
     },
+    '@/services/offline-session': { offlineListKey: (list, id) => `${list}:${id}` },
+    '@/services/conversation-list-state': {},
     '@clients/websocket-client': {
       wsClient: {
         on: (event, handler) => {

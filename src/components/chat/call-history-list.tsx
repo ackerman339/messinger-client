@@ -15,8 +15,8 @@ import { useCallHistory } from '@/hooks/use-call-history';
 import type { CallHistoryItem } from '@/types/call';
 
 export function CallHistoryList() {
-  const { user } = useUserContext();
-  const history = useCallHistory(user?.id);
+  const { user, canSync } = useUserContext();
+  const history = useCallHistory(user?.id, canSync);
   const [confirmation, setConfirmation] = useState<
     CallHistoryItem | 'all' | null
   >(null);
@@ -109,7 +109,7 @@ export function CallHistoryList() {
                 type='button'
                 disabled={busy}
                 onClick={
-                  history.items.length ? history.loadMore : history.refresh
+                  history.refresh
                 }
                 className='ml-2 font-semibold underline'
               >

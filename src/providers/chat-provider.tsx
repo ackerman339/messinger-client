@@ -1,6 +1,6 @@
 import type { LocationInput } from '../types/location';
 import { messageSync } from '@/services/message-sync';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { conversationService } from '@services/conversation';
 import { fileService } from '@services/files';
@@ -14,88 +14,58 @@ import {
   invitationConversation,
   mergeGroup,
 } from '@/services/groups';
-import { useCursorPagination } from '@/hooks/use-cursor-pagination';
+import { useCachedList } from '@/hooks/use-cached-list';
+import { offlineListKey } from '@/services/offline-session';
+import { updateConversationForMessage } from '@/services/conversation-list-state';
 
 import type { ReactNode } from 'react';
 import type { Conversation } from '../types/conversation';
 import type { FileAttachment, UploadContentType } from '../types/file';
 
+const conversationKey = (conversation: Conversation) => conversation.id;
+const fetchConversations = (cursor: string | null, signal: AbortSignal) =>
+  conversationService.getBootstrap({ cursor, limit: 20 }, signal);
+const isTransientConversation = (conversation: Conversation) =>
+  !!(conversation.invitation || conversation.isDeleted);
+const mergeConversation = (server: Conversation, previous?: Conversation) =>
+  server.type === 'GROUP' && previous ? mergeGroup(previous, server) : server;
+
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const { user } = useUserContext();
+  const { user, canSync } = useUserContext();
 
   const [searchParams, setSearchParams] = useSearchParams();
   const conversationId = searchParams.get('conversationId');
 
-  const [conversations, setConversations] = useState<
-    Map<string, Conversation>
-  >(new Map());
+  const {
+    records: conversations,
+    setRecords: setConversations,
+    loading: isLoading,
+    error,
+    hasMore,
+    refresh,
+    loadMore,
+  } = useCachedList<Conversation>({
+    cacheKey: user?.id ? offlineListKey('conversations', user.id) : undefined,
+    keyOf: conversationKey,
+    fetchPage: fetchConversations,
+    isTransient: isTransientConversation,
+    mergeItem: mergeConversation,
+  }, !!user?.id && canSync);
   const conversationsRef = useRef(conversations);
   useEffect(() => {
     conversationsRef.current = conversations;
   }, [conversations]);
   const [activeConversationId, setActiveConversationId] = useState('');
+  const activeIdRef = useRef(activeConversationId);
+  useEffect(() => {
+    activeIdRef.current = activeConversationId;
+  }, [activeConversationId]);
   const [receiverId, setReceiverId] = useState('');
   const [isLoadingAttachment, setIsLoadingAttachment] = useState(false);
   const [emptiedConversation, setEmptiedConversation] = useState<Pick<
     Conversation,
     'id'
   > | null>(null);
-
-  const { items, isLoading, hasMore, loadMore, reload } =
-    useCursorPagination<Conversation>({
-      fetchPage: (cursor) =>
-        conversationService.getBootstrap({
-          cursor,
-          limit: 20,
-        }),
-      getItemKey: (conversation) => conversation.id,
-      deps: [],
-    });
-
-  const connectionEpoch = useSyncExternalStore(
-    messageSync.subscribe,
-    () => messageSync.getSnapshot().connectionEpoch,
-    () => 0,
-  );
-  const previousConnection = useRef(connectionEpoch);
-  useEffect(() => {
-    if (connectionEpoch === previousConnection.current) return;
-    previousConnection.current = connectionEpoch;
-    reload();
-  }, [connectionEpoch, reload]);
-
-  /**
-   * Merge paginated conversations into the context map.
-   *
-   * Existing conversations have priority because they may
-   * contain newer data received through WebSocket events.
-   */
-  useEffect(() => {
-    if (items.length === 0) {
-      return;
-    }
-
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setConversations((previous) => {
-      const next = new Map(previous);
-
-      for (const conversation of items) {
-        const existing = next.get(conversation.id);
-
-        next.set(
-          conversation.id,
-          existing && !existing.invitation
-            ? {
-                ...conversation,
-                ...existing,
-              }
-            : conversation,
-        );
-      }
-
-      return next;
-    });
-  }, [items]);
 
   useEffect(() => {
     if (!conversationId) {
@@ -114,9 +84,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     [conversations, activeConversationId],
   );
 
+  const handleGroupDeleted = useCallback((id: string) => {
+    setConversations((previous) => {
+      const group = previous.get(id);
+      if (!group || group.isDeleted) return previous;
+      const next = new Map(previous);
+      next.set(id, { ...group, isDeleted: true, invitation: undefined });
+      return next;
+    });
+  }, [setConversations]);
+
   useEffect(() => {
-    const userId = user?.id;
-    if (!userId) return;
+    if (!user?.id) return;
+    const userId = user.id;
     let disposed = false;
     async function refreshGroup(id: string, joined = false) {
       try {
@@ -146,45 +126,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
     function cacheConversationMessage(
       message: import('@/types/conversation').Message,
+      incoming: boolean,
     ) {
-      const id = message.conversationId ?? message.conversation?.id;
-      if (!id) return;
-      setConversations((previous) => {
-        const conversation = previous.get(id);
-        if (!conversation || conversation.isDeleted) return previous;
-
-        if (conversation.type === 'PRIVATE') {
-          const participant = message.conversation?.members?.find(
-            (member) => member.userId !== userId,
-          );
-          if (participant?.avatarUrl === undefined) return previous;
-
-          const existing = conversation.members.find(
-            (member) => member.userId === participant.userId,
-          );
-          if (!existing || existing.avatarUrl === participant.avatarUrl) return previous;
-
-          const members = conversation.members.map((member) =>
-            member === existing ? { ...member, avatarUrl: participant.avatarUrl } : member,
-          );
-          return new Map(previous).set(id, { ...conversation, members });
-        }
-
-        const next = new Map(previous);
-        const messages = [message, ...conversation.messages].filter(
-          (item, index, all) =>
-            all.findIndex(
-              (other) =>
-                (other.id || other.messageId) ===
-                (item.id || item.messageId),
-            ) === index,
-        );
-        next.set(id, { ...conversation, messages, lastMessage: message });
-        return next;
-      });
+      setConversations((previous) =>
+        updateConversationForMessage(previous, message, userId, activeIdRef.current, incoming),
+      );
     }
     const off = [
-      wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, cacheConversationMessage),
+      wsClient.on(WS_SERVER_EVENTS.MESSAGE_SENT, (message) => cacheConversationMessage(message, false)),
       wsClient.on(
         WS_SERVER_EVENTS.GROUP_INVITATION_REJECTED,
         ({ conversationId }) => remove(conversationId),
@@ -231,7 +180,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         handleGroupDeleted(conversationId),
       ),
       wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-        cacheConversationMessage(message);
+        cacheConversationMessage(message, true);
         if (
           !message.conversation &&
           message.conversationId &&
@@ -244,17 +193,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       disposed = true;
       off.forEach((unsubscribe) => unsubscribe());
     };
-  }, [user?.id]);
-
-  function handleGroupDeleted(id: string) {
-    setConversations((previous) => {
-      const group = previous.get(id);
-      if (!group || group.isDeleted) return previous;
-      const next = new Map(previous);
-      next.set(id, { ...group, isDeleted: true, invitation: undefined });
-      return next;
-    });
-  }
+  }, [user?.id, setConversations, handleGroupDeleted]);
 
   function handleGroupOwnerChanged(id: string, newOwnerId: string) {
     setConversations((previous) => {
@@ -283,11 +222,30 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   function unSetCurrentConversation() {
+    activeIdRef.current = '';
     setActiveConversationId('');
   }
 
   function handleCurrentConversation(conversationId: string) {
+    activeIdRef.current = conversationId;
     setActiveConversationId(conversationId);
+    const conversation = conversationsRef.current.get(conversationId);
+    if (!user || !conversation?.members.some((member) => member.userId === user.id && member.unreadCount)) {
+      return;
+    }
+    setConversations((previous) => {
+      const current = previous.get(conversationId);
+      if (!current) return previous;
+      return new Map(previous).set(conversationId, {
+        ...current,
+        members: current.members.map((member) =>
+          member.userId === user.id ? { ...member, unreadCount: 0 } : member,
+        ),
+      });
+    });
+    if (canSync) {
+      void conversationService.resetUnreadMessagesCount({ conversationId }).catch(() => {});
+    }
   }
 
   async function handleReceiverId(id: string) {
@@ -297,6 +255,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   function handleNewConversation(conversation: Conversation) {
     setConversations((previous) => {
       const next = new Map(previous);
+      const current = previous.get(conversation.id);
+      if (current && !current.invitation) return previous;
       next.set(conversation.id, conversation);
 
       return next;
@@ -400,7 +360,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         conversations,
         activeConversation,
         loadingConversations: isLoading,
-        error: null,
+        error: canSync && error ? 'No se pudieron sincronizar las conversaciones.' : null,
         receiverId,
         hasMoreConversations: hasMore,
         isLoadingAttachment,
@@ -412,6 +372,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         handleReceiverId,
         unSetCurrentConversation,
         loadMoreConversations: loadMore,
+        refreshConversations: refresh,
         handleNewConversation,
         handleEmptyChat,
         handleRemoveConversation,

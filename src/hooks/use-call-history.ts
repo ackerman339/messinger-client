@@ -1,44 +1,55 @@
 import { wsClient } from '@/clients/websocket-client';
 import { useEffect, useRef, useState } from 'react';
-import { useCursorPagination } from './use-cursor-pagination';
+import { useCachedList } from './use-cached-list';
+import { offlineListKey } from '../services/offline-session';
 import { callService } from '@/services/call';
 import type { CallHistoryItem } from '@/types/call';
 
-export function useCallHistory(userId?: string) {
-  const history = useCursorPagination<CallHistoryItem>({
-    fetchPage: (cursor) =>
-      userId
-        ? callService.getHistories({ cursor, limit: 20 })
-        : Promise.resolve({ page: [], nextCursor: null }),
-    deps: [userId],
-  });
+const callKey = (call: CallHistoryItem) => call.id;
+const fetchCalls = (cursor: string | null, signal: AbortSignal) =>
+  callService.getHistories({ cursor, limit: 20 }, signal);
+
+export function useCallHistory(userId?: string, canSync = false) {
+  const history = useCachedList<CallHistoryItem>({
+    cacheKey: userId ? offlineListKey('calls', userId) : undefined,
+    keyOf: callKey,
+    fetchPage: fetchCalls,
+  }, !!userId && canSync);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
   const deletingRef = useRef(false);
 
-  const { setItems } = history;
-  useEffect(
-    () =>
-      wsClient.on('CALL_HISTORY_DELETED', ({ callId }) => {
-        setItems((items) =>
-          callId ? items.filter((item) => item.id !== callId) : [],
-        );
-      }),
-    [setItems],
-  );
+  const { setRecords, refresh } = history;
+  useEffect(() => {
+    if (!userId) return;
+    return wsClient.on('CALL_HISTORY_DELETED', ({ callId }) => {
+      setRecords((records) => {
+        if (!callId) return new Map();
+        const next = new Map(records);
+        next.delete(callId);
+        return next;
+      });
+      refresh();
+    });
+  }, [userId, setRecords, refresh]);
 
   async function remove(callId?: string) {
-    if (history.isLoading || deletingRef.current) return;
+    if (history.loading || deletingRef.current) return;
     deletingRef.current = true;
     setDeleting(callId ?? 'all');
     setActionError('');
     try {
       if (callId) {
         await callService.deleteHistory(callId);
-        history.setItems((items) => items.filter((item) => item.id !== callId));
+        setRecords((records) => {
+          const next = new Map(records);
+          next.delete(callId);
+          return next;
+        });
       } else {
         await callService.deleteAllHistories();
-        history.refresh();
+        setRecords(() => new Map());
+        refresh();
       }
     } catch {
       setActionError('No se pudo eliminar el registro. Inténtalo de nuevo.');
@@ -48,5 +59,12 @@ export function useCallHistory(userId?: string) {
     }
   }
 
-  return { ...history, deleting, actionError, remove };
+  return {
+    ...history,
+    items: [...history.records.values()],
+    isLoading: history.loading,
+    deleting,
+    actionError,
+    remove,
+  };
 }

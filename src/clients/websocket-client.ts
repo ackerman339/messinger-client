@@ -169,7 +169,7 @@ function handleMessage(event: MessageEvent) {
         if (message === 'WS_AUTH:SESSION_REVOKED') {
           disconnect();
           messageSync.setAccount();
-          authService.logout();
+          void authService.logout().catch(() => {});
           window.location.href = '/sign-in';
           return;
         }

@@ -45,10 +45,10 @@ export interface RequestUserConnectionDto {
 }
 
 export const conversationService = {
-  getBootstrap: async (params: PaginationParams) => {
+  getBootstrap: async (params: PaginationParams, signal?: AbortSignal) => {
     const response = await httpClient.get<
       ApiResponse<Pagination<Conversation>>
-    >('/conversation-list', { params });
+    >('/conversation-list', { params, signal, timeout: 8000 });
     return response.data.result;
   },
 

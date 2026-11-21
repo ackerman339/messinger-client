@@ -1,49 +1,38 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { useCachedList } from '../hooks/use-cached-list';
+import { offlineListKey } from '../services/offline-session';
 import { ContactsContext } from '@/context/contacts-context';
 import { contactService } from '@/services/contacts';
 import type { Contact, CreateContact } from '@/types/contact';
 
 import { useUserContext } from '@/context/user-context';
 
-const emptyContacts: ReadonlyMap<string, Contact> = new Map();
+const contactKey = (contact: Contact) => contact.userId;
+const fetchContacts = async (_cursor: string | null, signal: AbortSignal) => ({
+  page: await contactService.list(signal),
+  nextCursor: null,
+});
 
 export function ContactsProvider({ children }: { children: ReactNode }) {
-  const { user } = useUserContext();
-  return (
-    <AccountContacts key={user?.id} userId={user?.id}>
-      {children}
-    </AccountContacts>
-  );
-}
+  const { user, canSync } = useUserContext();
+  const {
+    records: contacts,
+    setRecords: setContacts,
+    refresh: retry,
+    ready,
+    loading,
+    error,
+  } = useCachedList<Contact>({
+    cacheKey: user?.id ? offlineListKey('contacts', user.id) : undefined,
+    keyOf: contactKey,
+    fetchPage: fetchContacts,
+  }, !!user?.id && canSync);
 
-function AccountContacts({ userId, children }: { userId?: string; children: ReactNode }) {
-  const [contacts, setContacts] = useState(emptyContacts);
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    if (!userId) return;
-    const controller = new AbortController();
-
-    void contactService.list(controller.signal).then(
-      (entries) => {
-        if (controller.signal.aborted) return;
-        const loaded = entries.map((entry) => [entry.userId, entry] as const);
-        // Preserve contacts added while the initial list was in flight.
-        setContacts((current) => new Map([...loaded, ...current]));
-        setStatus('ready');
-      },
-      () => {
-        if (!controller.signal.aborted) setStatus('error');
-      }
-    );
-    return () => controller.abort();
-  }, [attempt, userId]);
-
-  function retry() {
-    setStatus('loading');
-    setAttempt((previous) => previous + 1);
-  }
+  const status = !ready && !contacts.size && loading
+    ? 'loading'
+    : !ready && !contacts.size && error
+      ? 'error'
+      : 'ready';
 
   function store(contact: Contact) {
     setContacts((current) => new Map(current).set(contact.userId, contact));

@@ -18,7 +18,7 @@ export interface User {
   username: string;
   userCode: string;
   avatarUrl: string | null;
-  loginKey: string;
+  loginKey?: string;
   role: UserRole;
   status: UserStatus;
   createdAt: string;

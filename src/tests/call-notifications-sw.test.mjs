@@ -10,6 +10,7 @@ async function loadWorker(t, clients, registration = {}) {
   const handlers = new Map();
   globalThis.self = {
     skipWaiting() {},
+    location: { origin: 'https://messinger.test' },
     addEventListener: (event, callback) => handlers.set(event, callback),
     clients,
     registration,
@@ -20,7 +21,7 @@ async function loadWorker(t, clients, registration = {}) {
   const source = fs
     .readFileSync(new URL('../sw.ts', import.meta.url), 'utf8')
     .replace(/import \{ clientsClaim \}[^;]+;/, 'const clientsClaim = () => {};')
-    .replace(/import \{ precacheAndRoute \}[^;]+;/, 'const precacheAndRoute = () => {};');
+    .replace(/import \{ matchPrecache, precacheAndRoute \}[^;]+;/, 'const precacheAndRoute = () => {}; const matchPrecache = async () => new Response("app shell");');
   const compiled = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2023, module: ts.ModuleKind.ESNext },
   }).outputText;
@@ -360,4 +361,16 @@ test('canceling a group ring closes its notification without displaying another 
     showNotification: () => assert.fail('a closure is silent'),
   });
   assert.equal(closed, true);
+});
+
+
+test('offline navigation to chat serves the cached application shell', async (t) => {
+  const handlers = await loadWorker(t, {});
+  t.mock.method(globalThis, 'fetch', async () => { throw Error('offline'); });
+  let response;
+  handlers.get('fetch')({
+    request: { mode: 'navigate', url: 'https://messinger.test/chat?conversationId=cached' },
+    respondWith: (value) => { response = value; },
+  });
+  assert.equal(await (await response).text(), 'app shell');
 });

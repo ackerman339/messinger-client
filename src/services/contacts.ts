@@ -5,7 +5,7 @@ import type { Contact, CreateContact } from '@/types/contact';
 
 export const contactService = {
   async list(signal?: AbortSignal) {
-    const response = await httpClient.get<ApiResponse<Contact[]>>('/contacts', { signal });
+    const response = await httpClient.get<ApiResponse<Contact[]>>('/contacts', { signal, timeout: 8000 });
     return response.data.result;
   },
 

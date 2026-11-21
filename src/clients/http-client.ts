@@ -1,3 +1,4 @@
+import { clearOfflineSession } from '../services/offline-session';
 import axios, { AxiosError } from 'axios';
 
 export const httpClient = axios.create({
@@ -11,6 +12,7 @@ httpClient.interceptors.response.use(
     const status = error.response?.status;
 
     if (status === 401) {
+      clearOfflineSession();
       const isOnAuthPage =
         window.location.pathname === '/sign-in' || window.location.pathname === '/sign-up';
 

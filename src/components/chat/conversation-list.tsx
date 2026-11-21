@@ -9,8 +9,8 @@ import { useUserContext } from '@context/user-context';
 import { useChatContext } from '@context/chat-context';
 import { ChatMenu } from './chat-menu';
 import { useInfiniteScrollSentinel } from '@/hooks/use-infinite-scroll';
+import { sortConversations } from '@/services/conversation-list-state';
 import { conversationService } from '@/services/conversation';
-import { WS_SERVER_EVENTS } from '@/types/websocket';
 import { wsClient } from '@clients/websocket-client';
 
 import type {
@@ -28,7 +28,8 @@ export function ConversationList() {
     hasMoreConversations,
     handleCurrentConversation,
     loadMoreConversations,
-    handleNewConversation,
+    refreshConversations,
+    error,
   } = useChatContext();
 
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -42,41 +43,7 @@ export function ConversationList() {
     rootMargin: '10px',
   });
 
-  const conversationsItems = [...conversations.values()].sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
-
-  useLayoutEffect(() => {
-    const unsubscribeNewConversationFrom = wsClient.on(
-      WS_SERVER_EVENTS.NEW_MESSAGE,
-      async (message) => {
-        if (
-          message.conversation &&
-          !conversations.has(message.conversation.id)
-        ) {
-          handleNewConversation(message.conversation);
-        }
-      },
-    );
-
-    const unsubscribeNewConversationTo = wsClient.on(
-      WS_SERVER_EVENTS.MESSAGE_SENT,
-      async (message) => {
-        if (
-          message.conversation &&
-          !conversations.has(message.conversation.id)
-        ) {
-          handleNewConversation(message.conversation);
-        }
-      },
-    );
-
-    return () => {
-      unsubscribeNewConversationFrom();
-      unsubscribeNewConversationTo();
-    };
-  }, [conversations, handleNewConversation]);
+  const conversationsItems = sortConversations(conversations.values());
 
   const handleSelect = handleCurrentConversation;
 
@@ -134,7 +101,15 @@ export function ConversationList() {
             ref={viewportRef}
             className='min-h-0 flex-1 overflow-y-auto p-2'
           >
-            {loadingConversations && (
+            {error && (
+              <div className='px-3 py-2 text-sm text-text-secondary'>
+                <span role='alert'>{error}</span>
+                <button type='button' onClick={refreshConversations} className='ml-2 cursor-pointer underline'>
+                  Reintentar
+                </button>
+              </div>
+            )}
+            {loadingConversations && conversations.size === 0 && (
               <ListState label='Cargando conversaciones...' />
             )}
             {!loadingConversations && conversations.size === 0 ? (
@@ -198,7 +173,6 @@ function ConversationRow({
 }: ConversationRowProps) {
   const { user } = useUserContext();
   const { contacts } = useContactsContext();
-  const { activeConversation, emptiedConversation } = useChatContext();
 
   const privateConversationMember =
     conversation.type === 'PRIVATE'
@@ -219,9 +193,7 @@ function ConversationRow({
       ? conversation.name
       : contactDisplayName(contact, privateConversationMember?.username || 'Usuario Eliminado');
 
-  const [unreadMessageCount, setUnreadMessagesCount] = useState(
-    privateConversationUser?.unreadCount ?? 0,
-  );
+  const unreadMessageCount = isActive ? 0 : (privateConversationUser?.unreadCount ?? 0);
 
   const lastEntryRef = useRef<
     Pick<Message, 'type' | 'metadata'> | undefined
@@ -231,37 +203,13 @@ function ConversationRow({
     getLastMessageContent(conversation.lastMessage),
   );
 
-  // Reset local state after the provider reports a successful explicit clear action.
-  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
-    if (emptiedConversation?.id !== conversation.id) return;
-    lastEntryRef.current = undefined;
-    setLastMessageContent('');
-    setUnreadMessagesCount(0);
-  }, [emptiedConversation, conversation.id]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+    lastEntryRef.current = conversation.lastMessage;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastMessageContent(getLastMessageContent(conversation.lastMessage));
+  }, [conversation.lastMessage]);
 
   useLayoutEffect(() => {
-    const unsubscribeNewMessage = wsClient.on(WS_SERVER_EVENTS.NEW_MESSAGE, (message) => {
-      if ((message.conversation?.id ?? message.conversationId) !== conversation.id) return;
-      if (activeConversation?.id !== conversation.id) setUnreadMessagesCount((previous) => previous + 1);
-      lastEntryRef.current = message;
-      setLastMessageContent(getLastMessageContent(message));
-    });
-
-    const unsubscribeMessageSent = wsClient.on(
-      WS_SERVER_EVENTS.MESSAGE_SENT,
-      (message) => {
-        if (
-          (message.conversation?.id ?? message.conversationId) ===
-          conversation.id
-        ) {
-          lastEntryRef.current = message;
-          setLastMessageContent(getLastMessageContent(message));
-        }
-      },
-    );
-
     function handleCallEvent({
       conversationEvent,
     }: {
@@ -311,23 +259,13 @@ function ConversationRow({
     );
 
     return () => {
-      unsubscribeNewMessage();
-      unsubscribeMessageSent();
       unsubscribeHistoryDeleted();
       unsubscribeCallEnd();
       offGroupStarted();
       offGroupEnded();
       unsubscribeCallReject();
     };
-  }, [activeConversation, conversation.id]);
-
-  useEffect(() => {
-    if (activeConversation?.id !== conversation.id) {
-      return;
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUnreadMessagesCount(0);
-  }, [activeConversation?.id, conversation.id]);
+  }, [conversation.id]);
 
   return (
     <button
