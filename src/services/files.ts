@@ -14,14 +14,16 @@ type DownloadResponse = {
 
 export const fileService = {
   // R2 related service
-  uploadFile: (file: File, url: string) =>
-    fetch(url, {
+  uploadFile: async (file: File, url: string) => {
+    const response = await fetch(url, {
       method: 'PUT',
       body: file,
       headers: {
-        'Content-Type': file.type,
+        'Content-Type': file.type || 'application/octet-stream',
       },
-    }),
+    });
+    if (!response.ok) throw new Error(`R2 upload failed: ${response.status}`);
+  },
 
   processUpload: async (data: UploadDto) => {
     const response = await httpClient.post<ApiResponse<UploadResponse>>('/upload', data);

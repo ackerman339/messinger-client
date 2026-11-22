@@ -186,12 +186,13 @@ function PublishStatus({ feed, onClose }: { feed: Feed; onClose: () => void }) {
 
 type StatusVideoProps = {
   url: string;
+  requiresCredentials?: true;
   onProgress: (value: number) => void;
   onEnd: () => void;
   onError: () => void;
 };
 
-function StatusVideo({ url, onProgress, onEnd, onError }: StatusVideoProps) {
+function StatusVideo({ url, requiresCredentials, onProgress, onEnd, onError }: StatusVideoProps) {
   const ref = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -218,6 +219,7 @@ function StatusVideo({ url, onProgress, onEnd, onError }: StatusVideoProps) {
       ref={ref}
       className='min-h-0 max-h-full w-full object-contain'
       src={url}
+      crossOrigin={requiresCredentials ? 'use-credentials' : undefined}
       playsInline
       controls
       onLoadedMetadata={updateProgress}
@@ -253,10 +255,11 @@ function TimedStatusProgress({
 function StatusViewer({ feed }: { feed: Feed }) {
   const [imageLoaded, setImageLoaded] = useState('');
   const [failedMedia, setFailedMedia] = useState('');
+  const automaticallyRetried = useRef('');
   const [paused, setPaused] = useState(false);
   const [videoProgress, setVideoProgress] = useState(0);
   const [viewersId, setViewersId] = useState('');
-  const { current, currentGroup, mediaUrl, step } = feed;
+  const { current, currentGroup, media, retryMedia: loadMediaAgain, step } = feed;
   const showViewers = feed.isOwn && !!current && current.id === viewersId;
   const viewers = useStatusViewers(showViewers ? viewersId : undefined);
   const video = current?.contentType?.startsWith('video/');
@@ -271,6 +274,7 @@ function StatusViewer({ feed }: { feed: Feed }) {
       setPaused(false);
       setImageLoaded('');
       setFailedMedia('');
+      automaticallyRetried.current = '';
       setVideoProgress(0);
       step(offset);
     },
@@ -279,9 +283,21 @@ function StatusViewer({ feed }: { feed: Feed }) {
   const advance = useCallback(() => {
     if (canPlay) move(1);
   }, [canPlay, move]);
-  const failVideo = useCallback(() => {
-    if (currentId) setFailedMedia(currentId);
-  }, [currentId]);
+  const retryMedia = useCallback(() => {
+    setImageLoaded('');
+    setFailedMedia('');
+    setVideoProgress(0);
+    loadMediaAgain();
+  }, [loadMediaAgain]);
+  const handleMediaError = useCallback(() => {
+    if (!currentId) return;
+    if (automaticallyRetried.current !== currentId) {
+      automaticallyRetried.current = currentId;
+      retryMedia();
+      return;
+    }
+    setFailedMedia(currentId);
+  }, [currentId, retryMedia]);
 
   function toggleViewers() {
     if (video) setVideoProgress(0);
@@ -363,25 +379,36 @@ function StatusViewer({ feed }: { feed: Feed }) {
             <div className='flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto p-3'>
               {current.contentType &&
                 (feed.mediaError || failedMedia === current.id ? (
-                  <p role='alert'>No se pudo cargar el archivo del estado.</p>
-                ) : !mediaUrl ? (
+                  <div className='space-y-2 text-center'>
+                    <p role='alert'>No se pudo cargar el archivo del estado.</p>
+                    <button
+                      type='button'
+                      className='cursor-pointer rounded-lg px-3 py-2 hover:bg-white/15'
+                      onClick={retryMedia}
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : !media ? (
                   <p role='status'>Cargando…</p>
                 ) : video ? (
                   <StatusVideo
                     key={current.id}
-                    url={mediaUrl}
+                    url={media.uri}
+                    requiresCredentials={media.requiresCredentials}
                     onProgress={setVideoProgress}
                     onEnd={advance}
-                    onError={failVideo}
+                    onError={handleMediaError}
                   />
                 ) : (
                   <img
                     key={current.id}
                     className='min-h-0 max-h-full w-full object-contain'
-                    src={mediaUrl}
+                    src={media.uri}
+                    crossOrigin={media.requiresCredentials ? 'use-credentials' : undefined}
                     alt='Foto del estado'
                     onLoad={() => setImageLoaded(current.id)}
-                    onError={() => setFailedMedia(current.id)}
+                    onError={handleMediaError}
                   />
                 ))}
               {current.text && (

@@ -3,7 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChatContext } from '@/context/chat-context';
 import { useContactsContext } from '@/context/contacts-context';
 import { useUserContext } from '@/context/user-context';
-import { statusService, type Status, type StatusViewer } from '@/services/statuses';
+import {
+  statusService,
+  type Status,
+  type StatusMedia,
+  type StatusViewer,
+} from '@/services/statuses';
 
 export type StatusGroup = {
   authorId: string;
@@ -21,7 +26,8 @@ export function useStatuses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState('');
-  const [media, setMedia] = useState<{ id: string; url: string }>();
+  const [media, setMedia] = useState<{ id: string; source: StatusMedia }>();
+  const [mediaAttempt, setMediaAttempt] = useState(0);
   const [mediaError, setMediaError] = useState('');
   const [mutationError, setMutationError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -110,9 +116,9 @@ export function useStatuses() {
     const show = async () => {
       if (hasMedia) {
         try {
-          const url = await statusService.getMedia(currentId, controller.signal);
+          const source = await statusService.getMedia(currentId, controller.signal);
           if (controller.signal.aborted) return;
-          setMedia({ id: currentId, url });
+          setMedia({ id: currentId, source });
         } catch {
           if (!controller.signal.aborted) setMediaError(currentId);
           return;
@@ -133,7 +139,7 @@ export function useStatuses() {
     };
     void show();
     return () => controller.abort();
-  }, [currentId, hasMedia, isOwn]);
+  }, [currentId, hasMedia, isOwn, mediaAttempt]);
 
   const step = useCallback(
     (offset: number) => {
@@ -200,14 +206,21 @@ export function useStatuses() {
     }
   }
 
+  const retryMedia = useCallback(() => {
+    setMedia(undefined);
+    setMediaError('');
+    setMediaAttempt((attempts) => attempts + 1);
+  }, []);
+
   return {
     own,
     others,
     currentGroup,
     current,
     isOwn,
-    mediaUrl: media?.id === selectedId ? media.url : '',
+    media: media?.id === selectedId ? media.source : undefined,
     mediaError: mediaError === selectedId,
+    retryMedia,
     loading: loading && !!canSync,
     online: !!canSync,
     error,
