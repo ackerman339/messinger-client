@@ -117,6 +117,12 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
       return updates.at(-1)(ids);
     },
     bubble: module.exports.MessageBubble,
+    renderBubble: (id) => {
+      const bubble = nodes(tree).find(
+        (node) => node.type === module.exports.MessageBubble && node.props.message.id === id,
+      );
+      return bubble.type(bubble.props);
+    },
   };
 }
 const own = {
@@ -297,4 +303,70 @@ test('the web selection bar replies to a single confirmed message', () => {
   assert.equal(f.replies[0].id, 'two');
   assert.deepEqual(f.updates.at(-1), []);
   assert.equal(fixture(['one', 'two'], selectionMessages).bar.onReply, undefined);
+});
+
+function swipePointer(x, y, overrides = {}) {
+  return {
+    pointerId: 1,
+    pointerType: 'touch',
+    isPrimary: true,
+    clientX: x,
+    clientY: y,
+    target: { closest: () => null },
+    ...overrides,
+  };
+}
+
+test('swiping a web bubble in either direction replies to it without selecting it', () => {
+  const f = fixture([], [own, received]);
+  for (const [message, endX] of [[own, 160], [received, 40]]) {
+    const bubble = f.renderBubble(message.id).props;
+    bubble.onPointerDown(swipePointer(100, 100));
+    bubble.onPointerMove(swipePointer(endX, 105));
+    assert.equal(f.updates.at(-1), endX - 100);
+    bubble.onPointerUp(swipePointer(endX, 105));
+    bubble.onClick({ detail: 1, stopPropagation() {} });
+    assert.equal(f.updates.at(-1), 0);
+  }
+  assert.deepEqual(f.replies, [own, received]);
+});
+
+test('vertical scrolling, short or canceled swipes, and attachment controls do not reply in web', () => {
+  const f = fixture([], [received]);
+  const bubble = f.renderBubble(received.id).props;
+
+  bubble.onPointerDown(swipePointer(100, 100));
+  bubble.onPointerMove(swipePointer(110, 125));
+  bubble.onPointerUp(swipePointer(160, 190));
+
+  bubble.onPointerDown(swipePointer(100, 100));
+  bubble.onPointerMove(swipePointer(70, 105));
+  bubble.onPointerUp(swipePointer(70, 105));
+
+  bubble.onPointerDown(swipePointer(100, 100));
+  bubble.onPointerMove(swipePointer(160, 105));
+  bubble.onPointerCancel(swipePointer(160, 105));
+  bubble.onPointerUp(swipePointer(160, 105));
+
+  bubble.onPointerDown(swipePointer(100, 100, { target: { closest: () => ({}) } }));
+  bubble.onPointerUp(swipePointer(160, 105));
+
+  assert.deepEqual(f.replies, []);
+  bubble.onPointerDown(swipePointer(100, 100));
+  bubble.onPointerUp(swipePointer(100, 100));
+  bubble.onClick({ detail: 1, stopPropagation() {} });
+  assert.deepEqual(f.updates.at(-1)([]), ['two']);
+});
+
+test('web swipe reply is disabled for pending messages, deleted chats and active selections', () => {
+  for (const [f, message] of [
+    [fixture([], [{ ...received, localStatus: 'PENDING' }]), received],
+    [fixture([], [received], { id: 'chat', isDeleted: true }), received],
+    [fixture(['one'], [own, received]), received],
+  ]) {
+    const bubble = f.renderBubble(message.id).props;
+    bubble.onPointerDown(swipePointer(100, 100));
+    bubble.onPointerUp(swipePointer(160, 105));
+    assert.deepEqual(f.replies, []);
+  }
 });

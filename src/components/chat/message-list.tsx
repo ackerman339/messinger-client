@@ -21,7 +21,7 @@ import {
 } from 'react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Reply } from 'lucide-react';
 import { wsClient } from '@clients/websocket-client';
 import { MessageStatus, WS_SERVER_EVENTS } from '@/types/websocket';
 import { conversationService } from '@/services/conversation';
@@ -471,6 +471,7 @@ export function MessageList() {
           }
           selected={selectedMessageIds.includes(message.messageId || message.id)}
           onSelect={toggleMessageSelection}
+          onReply={hasConversation && !activeConversation?.isDeleted && !selectedMessageIds.length ? setReplyTarget : undefined}
         />
       ))}
     </div>
@@ -483,14 +484,22 @@ type MessageBubbleProps = {
   message: Message;
   selected: boolean;
   onSelect: (messageId: string) => void;
+  onReply?: (message: Message) => void;
 };
 
-function MessageBubble({ message, status, selected, onSelect, locationUpdate }: MessageBubbleProps) {
+const SWIPE_START_DISTANCE = 14;
+const SWIPE_REPLY_DISTANCE = 48;
+const SWIPE_MAX_OFFSET = 64;
+
+function MessageBubble({ message, status, selected, onSelect, onReply, locationUpdate }: MessageBubbleProps) {
   const { user } = useUserContext();
   const { activeConversation, conversations } = useChatContext();
   const { contacts } = useContactsContext();
 
   const bubbleRef = useRef<HTMLElement>(null);
+  const swipe = useRef<{ pointerId: number; x: number; y: number; horizontal: boolean } | null>(null);
+  const suppressSwipeClick = useRef(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
   useEffect(() => {
     const bubble = bubbleRef.current;
     if (
@@ -553,6 +562,7 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
       : null;
   const messageId = message.messageId || message.id;
   const location = locationUpdate ? mergeLocation(message.location, locationUpdate) : message.location;
+  const canSwipeToReply = Boolean(onReply && !message.localStatus);
 
   function stopLocation() {
     if (messageSync.stopLocation(message)) return;
@@ -560,9 +570,69 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
   }
 
 
-  function handleClick(event: React.MouseEvent<HTMLDivElement, MouseEvent>) {
-    event.stopPropagation();
+  function startSwipe(event: React.PointerEvent<HTMLElement>) {
+    suppressSwipeClick.current = false;
+    if (!event.isPrimary) {
+      swipe.current = null;
+      setSwipeOffset(0);
+      return;
+    }
+    if (
+      !canSwipeToReply ||
+      event.pointerType !== 'touch' ||
+      (event.target as Element).closest('a, button, input, select, textarea, [role="button"], audio, video')
+    ) return;
 
+    swipe.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      horizontal: false,
+    };
+  }
+
+  function swipeDistance(event: React.PointerEvent<HTMLElement>) {
+    const start = swipe.current;
+    if (start?.pointerId !== event.pointerId) return 0;
+
+    const distanceX = event.clientX - start.x;
+    const distanceY = Math.abs(event.clientY - start.y);
+    if (!start.horizontal) {
+      if (Math.abs(distanceX) >= SWIPE_START_DISTANCE && Math.abs(distanceX) > distanceY * 1.25) {
+        start.horizontal = true;
+      } else if (distanceY >= SWIPE_START_DISTANCE) {
+        swipe.current = null;
+      }
+    }
+    return start.horizontal ? distanceX : 0;
+  }
+
+  function moveSwipe(event: React.PointerEvent<HTMLElement>) {
+    if (swipe.current?.pointerId !== event.pointerId) return;
+    const distance = swipeDistance(event);
+    setSwipeOffset(Math.max(-SWIPE_MAX_OFFSET, Math.min(SWIPE_MAX_OFFSET, distance)));
+  }
+
+  function cancelSwipe(event: React.PointerEvent<HTMLElement>) {
+    if (swipe.current?.pointerId !== event.pointerId) return;
+    swipe.current = null;
+    setSwipeOffset(0);
+  }
+
+  function finishSwipe(event: React.PointerEvent<HTMLElement>) {
+    if (swipe.current?.pointerId !== event.pointerId) return;
+    const distance = swipeDistance(event);
+    suppressSwipeClick.current = Boolean(swipe.current?.horizontal);
+    cancelSwipe(event);
+    if (canSwipeToReply && Math.abs(distance) >= SWIPE_REPLY_DISTANCE) onReply?.(message);
+  }
+
+  function handleClick(event: React.MouseEvent<HTMLElement>) {
+    event.stopPropagation();
+    if (suppressSwipeClick.current && event.detail !== 0) {
+      suppressSwipeClick.current = false;
+      return;
+    }
     if (!message.localStatus) onSelect(messageId);
   }
 
@@ -571,18 +641,33 @@ function MessageBubble({ message, status, selected, onSelect, locationUpdate }: 
       ref={bubbleRef}
       data-selector-id={messageId}
       onClick={handleClick}
+      onPointerDown={startSwipe}
+      onPointerMove={moveSwipe}
+      onPointerUp={finishSwipe}
+      onPointerCancel={cancelSwipe}
       className={[
         'p-2',
         isOwn ? 'flex justify-end cursor-pointer' : 'flex justify-start cursor-pointer',
         selected ? 'ring-1 ring-accent/10 bg-accent/10' : '',
+        canSwipeToReply ? 'overflow-x-clip [touch-action:pan-y_pinch-zoom]' : '',
       ].join(' ')}
     >
       <div
         className={[
-          'max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
+          'relative max-w-[min(76%,620px)] rounded-lg px-3 py-2 shadow-sm',
           isOwn ? 'rounded-br-sm bg-bg-bubble-own' : 'rounded-bl-sm bg-bg-bubble-other',
+          swipeOffset === 0 ? 'motion-safe:transition-transform motion-safe:duration-150' : '',
         ].join(' ')}
+        style={swipeOffset ? { transform: `translateX(${swipeOffset}px)` } : undefined}
       >
+        {Math.abs(swipeOffset) >= SWIPE_START_DISTANCE * 2 && (
+          <span
+            aria-hidden='true'
+            className={`pointer-events-none absolute inset-y-0 flex w-12 items-center justify-center text-accent ${swipeOffset > 0 ? 'right-full' : 'left-full'}`}
+          >
+            <Reply size={22} />
+          </span>
+        )}
         {senderName && (
           <p className='mb-1 truncate text-xs font-semibold text-accent'>{senderName}</p>
         )}
