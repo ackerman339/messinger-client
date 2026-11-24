@@ -45,8 +45,8 @@ export const fileService = {
     return response.data;
   },
 
-  downloadFile: async (params: DownloadDto) => {
-    const response = await httpClient.get<ApiResponse<DownloadResponse>>('/download', { params });
+  downloadFile: async (params: DownloadDto, signal?: AbortSignal) => {
+    const response = await httpClient.get<ApiResponse<DownloadResponse>>('/download', { params, signal });
 
     return response.data.result;
   },

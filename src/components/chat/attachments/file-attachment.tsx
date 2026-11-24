@@ -1,7 +1,6 @@
 import { Download, File, LoaderCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
-
-import { fileService } from '@/services/files';
+import { useEffect, useRef, useState } from 'react';
+import { useAttachmentSource } from '@/hooks/use-attachment-source';
 
 type FileAttachmentProps = {
   attachmentId: string;
@@ -9,93 +8,59 @@ type FileAttachmentProps = {
   contentType: string;
 };
 
+const rowClass = 'flex max-w-xs items-center gap-3 rounded-lg bg-slate-100 px-3 py-2 text-left';
+const availableClass = 'cursor-pointer transition hover:bg-slate-200';
+
 export function FileAttachment({ attachmentId, fileName, contentType }: FileAttachmentProps) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [requested, setRequested] = useState(false);
+  const link = useRef<HTMLAnchorElement>(null);
+  const startDownload = useRef(false);
+  const { source, error, retry } = useAttachmentSource(attachmentId, contentType, requested);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!source || !startDownload.current) return;
+    startDownload.current = false;
+    link.current?.click();
+  }, [source]);
 
-    async function load() {
-      try {
-        setIsLoading(true);
-        setError(false);
-
-        const result = await fileService.downloadFile({
-          attachmentId,
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        setUrl(result.url);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        console.error('[attachment:file] failed to load:', error);
-
-        setError(true);
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      }
-    }
-
-    load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [attachmentId]);
-
-  if (isLoading) {
-    return (
-      <div className='flex max-w-xs items-center gap-3 rounded-lg bg-slate-100 px-3 py-2'>
-        <LoaderCircle className='shrink-0 animate-spin text-accent' size={20} />
-
-        <span className='truncate text-sm text-text-secondary'>{fileName}</span>
+  const loading = requested && !source && !error;
+  const label = error ? 'Reintentar descarga' : contentType;
+  const body = (
+    <>
+      <File size={24} className='shrink-0 text-accent' />
+      <div className='min-w-0 flex-1'>
+        <p className='truncate text-sm font-medium text-text-primary'>{fileName}</p>
+        <p className='truncate text-xs text-text-secondary'>{label}</p>
       </div>
-    );
-  }
+      {loading ? (
+        <LoaderCircle size={20} className='shrink-0 animate-spin text-accent' aria-label='Descargando' />
+      ) : (
+        <Download size={20} className='shrink-0 text-text-secondary' />
+      )}
+    </>
+  );
 
-  if (error || !url) {
+  if (source) {
     return (
-      <div className='flex max-w-xs items-center gap-3 rounded-lg bg-slate-100 px-3 py-2'>
-        <File size={22} className='shrink-0 text-text-secondary' />
-
-        <div className='min-w-0'>
-          <p className='truncate text-sm font-medium'>{fileName}</p>
-
-          <p className='text-xs text-text-secondary'>No se pudo cargar</p>
-        </div>
-      </div>
+      <a ref={link} href={source.url} download={fileName} className={`${rowClass} ${availableClass}`}>
+        {body}
+      </a>
     );
   }
 
   return (
-    <a
-      href={url}
-      download={fileName}
-      target='_blank'
-      rel='noopener noreferrer'
-      className='flex max-w-xs items-center gap-3 rounded-lg bg-slate-100 px-3 py-2 transition hover:bg-slate-200'
-      onClick={(event) => {
-        event.stopPropagation();
+    <button
+      type='button'
+      disabled={loading}
+      className={`${rowClass} ${availableClass}`}
+      onClick={() => {
+        startDownload.current = true;
+        setRequested(true);
+        if (error) retry();
       }}
+      aria-label={error ? `Reintentar descarga de ${fileName}` : `Descargar ${fileName}`}
     >
-      <File size={24} className='shrink-0 text-accent' />
-
-      <div className='min-w-0 flex-1'>
-        <p className='truncate text-sm font-medium text-text-primary'>{fileName}</p>
-        <p className='truncate text-xs text-text-secondary'>{contentType}</p>
-      </div>
-
-      <Download size={20} className='shrink-0 text-text-secondary' />
-    </a>
+      {body}
+    </button>
   );
 }

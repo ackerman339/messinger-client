@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
 import { LoaderCircle, Pause, Play } from 'lucide-react';
-import { fileService } from '@/services/files';
+import { useAttachmentSource } from '@/hooks/use-attachment-source';
 
 type AudioAttachmentProps = {
   attachmentId: string;
   fileName: string;
   contentType: string;
+  autoLoad?: boolean;
 };
-
-type LocalAudioSource = { controller: AbortController; url?: string };
 
 const initialTimeline = { currentTime: 0, duration: 0, canSeek: false };
 
@@ -42,51 +41,16 @@ function wasPlaybackInterrupted(error: unknown) {
   );
 }
 
-export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAttachmentProps) {
+export function AudioAttachment({ attachmentId, fileName, contentType, autoLoad = true }: AudioAttachmentProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const finished = useRef(false);
-  const localSource = useRef<LocalAudioSource | null>(null);
-  const [url, setUrl] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-  const [isLoadingUrl, setIsLoadingUrl] = useState(true);
+  const [requested, setRequested] = useState(false);
+  const enabled = autoLoad || requested;
+  const { source, error: loadError, retry } = useAttachmentSource(attachmentId, contentType, enabled);
   const [isBuffering, setIsBuffering] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState('');
   const [timeline, setTimeline] = useState(initialTimeline);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setIsLoadingUrl(true);
-        setError('');
-        setIsPlaying(false);
-        setIsBuffering(false);
-        finished.current = false;
-        setTimeline(initialTimeline);
-        const result = await fileService.downloadFile({ attachmentId });
-
-        if (!cancelled) setUrl(result.url);
-      } catch (error) {
-        if (!cancelled) {
-          console.error('[audio] failed to get URL:', error);
-          setError('No se pudo cargar el audio');
-        }
-      } finally {
-        if (!cancelled) setIsLoadingUrl(false);
-      }
-    }
-
-    void load();
-    return () => {
-      cancelled = true;
-      const source = localSource.current;
-      localSource.current = null;
-      source?.controller.abort();
-      if (source?.url) URL.revokeObjectURL(source.url);
-    };
-  }, [attachmentId, attempt]);
 
   const syncTimeline = useCallback((audio: HTMLAudioElement, ended = audio.ended) => {
     const currentTime = finiteTime(audio.currentTime);
@@ -110,7 +74,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
 
   useEffect(() => {
     const audio = audioRef.current;
-    if (!audio || isLoadingUrl || error || typeof OfflineAudioContext === 'undefined') return;
+    if (!audio || !source || error || typeof OfflineAudioContext === 'undefined') return;
 
     const controller = new AbortController();
     function cancelIfDurationKnown() {
@@ -127,7 +91,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
       if (controller.signal.aborted) return;
 
       try {
-        const bytes = await fileService.downloadAudioBytes(attachmentId, controller.signal);
+        const bytes = await source.blob.arrayBuffer();
         if (controller.signal.aborted) return;
 
         // Some recorded files omit the duration from their headers.
@@ -154,7 +118,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
       audio.removeEventListener('durationchange', cancelIfDurationKnown);
       audio.removeEventListener('ended', cancelIfDurationKnown);
     };
-  }, [attachmentId, error, isLoadingUrl, syncTimeline, url]);
+  }, [error, source, syncTimeline]);
 
   function finishPlayback() {
     setIsPlaying(false);
@@ -169,7 +133,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
 
   async function togglePlay() {
     const audio = audioRef.current;
-    if (!audio || (localSource.current && !localSource.current.url)) return;
+    if (!audio) return;
 
     const duration = finiteTime(audio.duration);
     const atEnd =
@@ -188,28 +152,8 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
       }
 
       setIsBuffering(true);
-      try {
-        if (audio.error) throw audio.error;
-        await playAudio(audio);
-      } catch (error) {
-        if (audioRef.current !== audio || wasPlaybackInterrupted(error)) return;
-        if (localSource.current) throw error;
-
-        // Use the complete file if the browser cannot play the signed R2 response.
-        const controller = new AbortController();
-        const source: LocalAudioSource = { controller };
-        localSource.current = source;
-        setIsBuffering(true);
-        const bytes = await fileService.downloadAudioBytes(attachmentId, controller.signal);
-        if (controller.signal.aborted || audioRef.current !== audio) return;
-
-        const mimeType = contentType.split(';')[0].trim().toLowerCase();
-        const type = mimeType === 'audio/m4a' || mimeType === 'audio/x-m4a' ? 'audio/mp4' : mimeType;
-        source.url = URL.createObjectURL(new Blob([bytes], { type }));
-        audio.src = source.url;
-        setTimeline((previous) => ({ ...previous, currentTime: 0, canSeek: false }));
-        await playAudio(audio);
-      }
+      if (audio.error) throw audio.error;
+      await playAudio(audio);
     } catch (error) {
       if (audioRef.current !== audio) return;
       if (!wasPlaybackInterrupted(error)) handlePlaybackError(error);
@@ -230,7 +174,20 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
     syncTimeline(audio);
   }
 
-  if (isLoadingUrl) {
+  if (!enabled) {
+    return (
+      <button
+        type='button'
+        className='flex h-12 w-72 max-w-full cursor-pointer items-center gap-2 rounded-lg bg-slate-100 px-2 text-sm text-text-secondary'
+        onClick={() => setRequested(true)}
+      >
+        <Play size={17} className='shrink-0 text-accent' />
+        <span className='truncate'>{fileName}</span>
+      </button>
+    );
+  }
+
+  if (!source && !loadError) {
     return (
       <div className='flex h-12 w-72 items-center justify-center rounded-lg bg-slate-100'>
         <LoaderCircle className='animate-spin text-accent' size={20} />
@@ -238,7 +195,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
     );
   }
 
-  if (error || !url) {
+  if (error || loadError || !source) {
     return (
       <div className='flex min-h-12 w-72 max-w-full flex-wrap items-center justify-center gap-2 rounded-lg bg-slate-100 px-2 py-1 text-sm text-text-secondary'>
         <span role='status'>{error || 'No se pudo cargar el audio'}</span>
@@ -246,8 +203,10 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
           type='button'
           className='cursor-pointer font-medium text-accent-ink hover:underline'
           onClick={() => {
-            setIsLoadingUrl(true);
-            setAttempt((previous) => previous + 1);
+            finished.current = false;
+            setError('');
+            setTimeline(initialTimeline);
+            retry();
           }}
         >
           Reintentar
@@ -260,7 +219,7 @@ export function AudioAttachment({ attachmentId, fileName, contentType }: AudioAt
     <div className='flex h-12 w-72 max-w-full items-center gap-2 rounded-lg bg-slate-100 px-2'>
       <audio
         ref={audioRef}
-        src={url}
+        src={source.url}
         preload='auto'
         loop={false}
         className='hidden'

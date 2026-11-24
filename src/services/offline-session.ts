@@ -1,3 +1,4 @@
+import { clearAttachmentAccount } from './attachment-storage';
 import { offlineStorage } from './offline-storage';
 import type { User } from '../types/user';
 
@@ -33,6 +34,7 @@ export function saveOfflineUser({
 export function clearOfflineSession(userId = readOfflineSession()?.user?.id) {
   offlineStorage.write(sessionKey, { user: null });
   if (!userId) return;
+  clearAttachmentAccount(userId);
   for (const list of ['conversations', 'calls', 'contacts'] as const) {
     offlineStorage.remove(offlineListKey(list, userId));
   }

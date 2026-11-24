@@ -26,7 +26,10 @@ function fixture() {
   };
   return {
     ...load('cached-list', { './offline-storage': { offlineStorage } }),
-    ...load('offline-session', { './offline-storage': { offlineStorage } }),
+    ...load('offline-session', {
+      './offline-storage': { offlineStorage },
+      './attachment-storage': { clearAttachmentAccount() {} },
+    }),
     disk,
   };
 }

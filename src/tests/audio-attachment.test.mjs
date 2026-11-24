@@ -22,17 +22,24 @@ async function fixture({
   seekable = true,
   decode,
   dispatchMetadata = true,
-  contentType = 'audio/mpeg',
-  failRemotePlay = false,
+  failPlay = false,
 } = {}) {
   const events = new Map();
   const timers = new Set();
-  const requests = [];
-  const blobs = [];
-  const revoked = [];
+  const reads = [];
+  const retries = [];
+  const notices = [];
   const bytes = new ArrayBuffer(8);
   const actions = [];
-  const remoteUrl = 'https://example.test/audio';
+  const source = {
+    url: 'blob:local-audio',
+    blob: {
+      async arrayBuffer() {
+        reads.push('blob');
+        return bytes;
+      },
+    },
+  };
   let dispatch;
   let originalSrc;
   let src;
@@ -62,7 +69,7 @@ async function fixture({
       actions.push(['play', this.currentTime]);
       if (this.ended)
         throw new DOMException('Ended recording needs to be reopened', 'NotSupportedError');
-      if (failRemotePlay && this.src === remoteUrl) {
+      if (failPlay) {
         this.error = { code: 4 };
         dispatch('onError');
         return new Promise(() => {});
@@ -135,14 +142,8 @@ async function fixture({
   const dependencies = {
     react: hooks,
     'lucide-react': { Pause: 'Pause', Play: 'Play', LoaderCircle: 'LoaderCircle' },
-    '@/services/files': {
-      fileService: {
-        downloadFile: async () => ({ url: remoteUrl }),
-        downloadAudioBytes: async (id, signal) => {
-          requests.push({ id, signal });
-          return bytes;
-        },
-      },
+    '@/hooks/use-attachment-source': {
+      useAttachmentSource: () => ({ source, retry: () => retries.push('retry') }),
     },
   };
   new Function(
@@ -150,7 +151,7 @@ async function fixture({
     'module',
     'exports',
     'OfflineAudioContext',
-    'URL',
+    'console',
     'setTimeout',
     'clearTimeout',
     outputText
@@ -166,13 +167,7 @@ async function fixture({
           }
         }
       : undefined,
-    {
-      createObjectURL(blob) {
-        blobs.push(blob);
-        return 'blob:audio-fallback';
-      },
-      revokeObjectURL: (url) => revoked.push(url),
-    },
+    { error: (...args) => notices.push(args) },
     (callback) => {
       timers.add(callback);
       return callback;
@@ -188,7 +183,7 @@ async function fixture({
     const tree = module.exports.AudioAttachment({
       attachmentId: 'note',
       fileName: 'note',
-      contentType,
+      contentType: 'audio/mpeg',
     });
     const children = Array.isArray(tree.props.children) ? tree.props.children : [];
     const element = children.find((child) => child.type === 'audio');
@@ -215,13 +210,9 @@ async function fixture({
   return {
     audio,
     actions,
-    requests,
-    blobs,
-    revoked,
-    unmount: () => {
-      refs[0].current = null;
-      cleanups.forEach((cleanup) => cleanup?.());
-    },
+    reads,
+    retries,
+    notices,
     measure: async () => {
       const scheduled = [...timers];
       timers.clear();
@@ -295,7 +286,7 @@ test('a WebM with no finite duration uses the elapsed time at the end', async ()
 });
 
 test('calculates missing duration on first load without playing the attachment', async () => {
-  const { measure, slider, actions, requests, controls } = await fixture({
+  const { measure, slider, actions, reads, controls } = await fixture({
     duration: Infinity,
     seekable: false,
     decode: async () => ({ duration: 17.125 }),
@@ -303,77 +294,60 @@ test('calculates missing duration on first load without playing the attachment',
   await measure();
   assert.equal(slider().max, 17.125);
   assert.equal(slider().value, 0);
-  assert.equal(requests[0].id, 'note');
+  assert.deepEqual(reads, ['blob']);
   assert.deepEqual(actions, []);
   await controls().onClick();
   assert.deepEqual(actions, [['play', 0]]);
-  assert.equal(requests.length, 1);
+  assert.deepEqual(reads, ['blob']);
 });
 
-test('recovers the first Play of a received M4A when the signed remote source fails', async () => {
-  const { audio, actions, controls, requests, blobs, revoked, unmount } = await fixture({
-    contentType: 'audio/m4a',
-    failRemotePlay: true,
-  });
+test('web audio surfaces local playback failure and retries through the attachment loader', async () => {
+  const { audio, controls, retries, notices, reads } = await fixture({ failPlay: true });
+  assert.equal(audio.src, 'blob:local-audio');
   await controls().onClick();
-  assert.deepEqual(actions, [['play', 0], ['play', 0]]);
-  assert.equal(controls()['aria-label'], 'Pausar');
-  assert.equal(audio.src, 'blob:audio-fallback');
-  assert.equal(blobs[0].type, 'audio/mp4');
-  assert.equal(blobs[0].size, 8);
-  assert.equal(requests.length, 1);
-
-  audio.finish();
-  assert.equal(controls()['aria-label'], 'Reproducir');
-  assert.equal(actions.length, 2);
-  await controls().onClick();
-  assert.deepEqual(actions.slice(2), [['load'], ['play', 0]]);
-  assert.equal(requests.length, 1);
-  unmount();
-  assert.deepEqual(revoked, ['blob:audio-fallback']);
+  assert.equal(notices.length, 1);
+  assert.deepEqual(reads, []);
+  assert.equal(controls().children, 'Reintentar');
+  controls().onClick();
+  assert.deepEqual(retries, ['retry']);
 });
 
-test('a native preload error leaves Play available and opens the received file', async () => {
-  const { audio, actions, controls, dispatch, requests } = await fixture({
-    contentType: 'audio/m4a',
-  });
+test('a native preload error reports failure on Play', async () => {
+  const { audio, actions, controls, dispatch, retries } = await fixture();
   audio.error = { code: 4 };
   dispatch('onError');
   assert.equal(controls().disabled, false);
-  assert.deepEqual(requests, []);
 
   await controls().onClick();
-  assert.equal(requests.length, 1);
-  assert.equal(controls()['aria-label'], 'Pausar');
-  assert.deepEqual(actions, [['play', 0]]);
+  assert.equal(controls().children, 'Reintentar');
+  assert.deepEqual(actions, []);
+  controls().onClick();
+  assert.deepEqual(retries, ['retry']);
 });
 
-test('skips downloading bytes when the browser already knows the duration', async () => {
-  const { measure, slider, requests } = await fixture({
+test('skips reading the local blob when the browser already knows the duration', async () => {
+  const { measure, slider, reads } = await fixture({
     duration: 12.037,
     dispatchMetadata: false,
     decode: () => assert.fail('native metadata should suffice'),
   });
   await measure();
   assert.equal(slider().max, 12.037);
-  assert.deepEqual(requests, []);
+  assert.deepEqual(reads, []);
 });
 
 test('late native metadata takes priority over the pending decoded duration', async () => {
   let completeDecode;
-  const { audio, dispatch, measure, requests, slider } = await fixture({
+  const { audio, dispatch, measure, reads, slider } = await fixture({
     duration: Infinity,
     seekable: false,
-    decode: () =>
-      new Promise((resolve) => {
-        completeDecode = resolve;
-      }),
+    decode: () => new Promise((resolve) => { completeDecode = resolve; }),
   });
   const probe = measure();
   await Promise.resolve();
+  assert.deepEqual(reads, ['blob']);
   audio.duration = 14.035;
   dispatch('onDurationChange');
-  assert.equal(requests[0].signal.aborted, true);
   completeDecode({ duration: 14.031 });
   await probe;
   assert.equal(slider().max, 14.035);

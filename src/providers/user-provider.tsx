@@ -1,3 +1,4 @@
+import { removeExpiredAttachments } from '@/services/attachment-storage';
 import { messageSync } from '@/services/message-sync';
 import { useEffect, useRef, useState } from 'react';
 
@@ -145,6 +146,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setStatus('signedOut');
   };
+
+  useEffect(() => {
+    function cleanAttachments() {
+      if (document.visibilityState === 'visible') void removeExpiredAttachments().catch(() => {});
+    }
+    cleanAttachments();
+    document.addEventListener('visibilitychange', cleanAttachments);
+    const interval = window.setInterval(cleanAttachments, 60 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', cleanAttachments);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   function updateProfile(profile: User) {
     if (user?.id !== profile.id || loggedOut.current) return;
