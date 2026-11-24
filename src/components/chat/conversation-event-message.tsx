@@ -1,13 +1,19 @@
 import { format } from 'date-fns';
 import { ArrowDownLeft, ArrowUpRight, Phone, Video } from 'lucide-react';
+import type { Contact } from '../../types/contact';
 import type { Message } from '../../types/conversation';
 
 type EventMessage = Pick<Message, 'type' | 'metadata' | 'createdAt' | 'actorId' | 'targetUserId'>;
 type EventMember = { userId: string; username: string };
 
-function groupEventText(message: EventMessage, members: EventMember[]) {
+function groupEventText(
+  message: EventMessage,
+  members: EventMember[],
+  contacts?: ReadonlyMap<string, Contact>,
+) {
   const id = message.targetUserId || message.actorId;
-  const name = members.find((member) => member.userId === id)?.username;
+  const contactName = id ? contacts?.get(id)?.name?.trim() : undefined;
+  const name = contactName || members.find((member) => member.userId === id)?.username;
   const target = name || 'Un miembro';
   const call = message.metadata?.media === 'video' ? 'videollamada grupal' : 'llamada grupal';
   switch (message.type) {
@@ -34,15 +40,18 @@ export function ConversationEventMessage({
   message,
   isOwn = false,
   members = [],
+  contacts,
 }: {
   message: EventMessage;
   isOwn?: boolean;
   members?: EventMember[];
+  contacts?: ReadonlyMap<string, Contact>;
 }) {
   if (message.type !== 'CALL_ACCEPTED' && message.type !== 'CALL_END') {
     return (
       <div className='self-center rounded-lg bg-bg-app/85 px-4 py-2 text-sm text-text-secondary'>
-        {groupEventText(message, members)} · {format(new Date(message.createdAt), 'dd MMM hh:mm a')}
+        {groupEventText(message, members, contacts)} ·{' '}
+        {format(new Date(message.createdAt), 'dd MMM hh:mm a')}
       </div>
     );
   }

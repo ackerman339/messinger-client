@@ -10,9 +10,11 @@ import {
 import { format, isToday, isYesterday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useState } from 'react';
+import { useContactsContext } from '@/context/contacts-context';
 import { useUserContext } from '@/context/user-context';
 import { useCallHistory } from '@/hooks/use-call-history';
 import type { CallHistoryItem } from '@/types/call';
+import { contactDisplayName, type Contact } from '@/types/contact';
 
 export function CallHistoryList() {
   const { user, canSync } = useUserContext();
@@ -189,7 +191,8 @@ export function CallHistoryRow({
   deleting?: boolean;
   onDelete: () => void;
 }) {
-  const details = callDetails(call, userId);
+  const { contacts } = useContactsContext();
+  const details = callDetails(call, userId, contacts);
   const Icon = call.media === 'video' ? Video : Phone;
   const Direction = details.outgoing ? ArrowUpRight : ArrowDownLeft;
   return (
@@ -248,10 +251,15 @@ export function CallHistoryRow({
   );
 }
 
-function callDetails(call: CallHistoryItem, userId?: string) {
+function callDetails(
+  call: CallHistoryItem,
+  userId: string | undefined,
+  contacts: ReadonlyMap<string, Contact>,
+) {
   const outgoing = call.callerId === userId;
   const person = outgoing ? call.callee : call.caller;
-  const name = person?.username?.trim() || 'Usuario eliminado';
+  const contact = contacts.get(outgoing ? call.calleeId : call.callerId);
+  const name = contactDisplayName(contact, person?.username?.trim() || 'Usuario eliminado');
   const attended =
     call.status === 'ended' && !!(call.acceptedAt || call.connectedAt);
   const durationSeconds =

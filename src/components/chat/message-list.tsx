@@ -544,6 +544,7 @@ function MessageBubble({ message, status, selected, onSelect, onReply, locationU
     return (
       <ConversationEventMessage
         message={message}
+        contacts={contacts}
         members={[
           ...(activeConversation?.members ?? []),
           ...(activeConversation?.knownMembers ?? []),

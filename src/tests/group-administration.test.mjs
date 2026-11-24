@@ -111,26 +111,34 @@ const group = () => ({
     },
   ],
 });
-for (const [type, target, expected] of [
-  ['MEMBER_JOINED', null, 'Roberto se unió al grupo'],
-  ['MEMBER_LEFT', 'bob', 'Roberto dejó el grupo'],
-  ['MEMBER_REMOVED', 'bob', 'Roberto fue eliminado del grupo'],
-  ['OWNERSHIP_TRANSFERRED', 'bob', 'Roberto es el nuevo propietario'],
+for (const [type, targetUserId, description] of [
+  ['GROUP_CREATED', null, 'creó el grupo'],
+  ['GROUP_CALL_STARTED', null, 'inició una videollamada grupal'],
+  ['MEMBER_JOINED', null, 'se unió al grupo'],
+  ['MEMBER_LEFT', 'bob', 'dejó el grupo'],
+  ['MEMBER_REMOVED', 'bob', 'fue eliminado del grupo'],
+  ['OWNERSHIP_TRANSFERRED', 'bob', 'es el nuevo propietario'],
 ]) {
-  test(`${type} resolves the affected member by ID in the client`, () => {
+  test(`${type} prefers the saved name for the person in the event`, () => {
     const { ConversationEventMessage } = load(
       `${components}conversation-event-message.tsx`,
     );
-    const tree = ConversationEventMessage({
-      message: {
-        type,
-        actorId: type === 'MEMBER_JOINED' ? 'bob' : 'alice',
-        targetUserId: target,
-        createdAt: '2026-11-17T12:00:00Z',
-      },
-      members: group().members,
-    });
-    assert.ok(text(tree).includes(expected));
+    const message = {
+      type,
+      actorId: targetUserId ? 'alice' : 'bob',
+      targetUserId,
+      createdAt: '2026-11-17T12:00:00Z',
+      metadata: type === 'GROUP_CALL_STARTED' ? { media: 'video' } : undefined,
+    };
+    const members = group().members;
+    const contacts = new Map([
+      ['alice', { name: 'Ali' }],
+      ['bob', { name: ' Beto ' }],
+    ]);
+
+    assert.ok(text(ConversationEventMessage({ message, members })).includes(`Roberto ${description}`));
+    assert.ok(text(ConversationEventMessage({ message, members, contacts })).includes(`Beto ${description}`));
+    assert.ok(text(ConversationEventMessage({ message, contacts })).includes(`Beto ${description}`));
   });
 }
 function management(
