@@ -2,13 +2,16 @@ import { useMemo, useState } from 'react';
 import { useContactsContext } from '@/context/contacts-context';
 import { useUserContext } from '@/context/user-context';
 import { sortConversations } from '@/services/conversation-list-state';
-import type { Conversation } from '@/types/conversation';
+import type { Conversation, Message } from '@/types/conversation';
 
 function searchable(value?: string | null) {
   return (value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('es');
 }
 
-export function useConversationSearch(conversations: ReadonlyMap<string, Conversation>) {
+export function useConversationSearch(
+  conversations: ReadonlyMap<string, Conversation>,
+  { includeMessages = true } = {},
+) {
   const [query, setQuery] = useState('');
   const { user } = useUserContext();
   const { contacts } = useContactsContext();
@@ -17,8 +20,17 @@ export function useConversationSearch(conversations: ReadonlyMap<string, Convers
   const results = useMemo(() => {
     if (!term) return items;
 
+    const matchesMessage = (message?: Message) =>
+      message?.type === 'MESSAGE' && searchable(message.content).includes(term);
+
     return items.filter((conversation) => {
       if (conversation.type === 'GROUP' && searchable(conversation.name).includes(term)) {
+        return true;
+      }
+      if (
+        includeMessages &&
+        (matchesMessage(conversation.lastMessage) || conversation.messages?.some(matchesMessage))
+      ) {
         return true;
       }
       return conversation.members.some((member) => {
@@ -29,7 +41,7 @@ export function useConversationSearch(conversations: ReadonlyMap<string, Convers
         );
       });
     });
-  }, [items, contacts, term, user?.id]);
+  }, [items, contacts, term, user?.id, includeMessages]);
 
   return { query, setQuery, results, isSearching: Boolean(term) };
 }

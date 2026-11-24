@@ -38,7 +38,13 @@ import type { Message, ConversationEvent } from '@/types/conversation';
 
 export function MessageList() {
   const { user } = useUserContext();
-  const { activeConversation, isLoadingAttachment, emptiedConversation, setReplyTarget } = useChatContext();
+  const {
+    activeConversation,
+    isLoadingAttachment,
+    emptiedConversation,
+    setReplyTarget,
+    removeCachedMessages,
+  } = useChatContext();
   const hasConversation = !!activeConversation;
   const conversationId = activeConversation?.id;
 
@@ -394,13 +400,14 @@ export function MessageList() {
   }
 
   async function deleteMessages() {
-    if (!canDelete) return;
+    if (!canDelete || !conversationId) return;
     setIsDeleteMessagesLoading(true);
     await conversationService.deleteMessages({
-      conversationId: activeConversation!.id,
+      conversationId,
       messagesIds: selectedMessageIds,
     });
 
+    removeCachedMessages(conversationId, selectedMessageIds);
     selectedMessageIds.forEach((id) => messageSync.cancelLocationTracking(id));
     const newItems = serverMessages.filter(
       (message) => !selectedMessageIds.includes(message.messageId || message.id),

@@ -31,6 +31,7 @@ export type ChatContextValue = {
   refreshConversations: () => void;
   handleNewConversation: (conversation: Conversation) => void;
   handleEmptyChat: (conversationId: string) => void;
+  removeCachedMessages: (conversationId: string, messageIds: readonly string[]) => void;
   handleRemoveConversation: (conversationId: string) => void;
   handleGroupDeleted: (conversationId: string) => void;
   handleGroupOwnerChanged: (
@@ -60,6 +61,7 @@ export const ChatContext = createContext<ChatContextValue>({
   refreshConversations: () => {},
   handleNewConversation: () => {},
   handleEmptyChat: () => {},
+  removeCachedMessages: () => {},
   handleRemoveConversation: () => {},
   handleGroupDeleted: () => {},
   handleGroupOwnerChanged: () => {},

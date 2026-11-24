@@ -365,6 +365,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }, replyTarget ?? undefined));
   }
 
+  const removeCachedMessages = useCallback(
+    (conversationId: string, messageIds: readonly string[]) => {
+      const deleted = new Set(messageIds);
+      setConversations((previous) => {
+        const conversation = previous.get(conversationId);
+        if (!conversation) return previous;
+
+        const { lastMessage } = conversation;
+        const cached = conversation.messages ?? [];
+        const messages = cached.filter((message) => !deleted.has(message.messageId || message.id));
+        const deletedLastMessage = lastMessage && deleted.has(lastMessage.messageId || lastMessage.id);
+        if (messages.length === cached.length && !deletedLastMessage) return previous;
+
+        return new Map(previous).set(conversationId, {
+          ...conversation,
+          messages,
+          lastMessage: deletedLastMessage ? messages[0] : lastMessage,
+        });
+      });
+    },
+    [setConversations],
+  );
+
   function handleEmptyChat(conversationId: string) {
     setReplyDraft((current) => current?.conversationId === conversationId ? null : current);
     setConversations((previous) => {
@@ -410,6 +433,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         refreshConversations: refresh,
         handleNewConversation,
         handleEmptyChat,
+        removeCachedMessages,
         handleRemoveConversation,
         handleGroupDeleted,
         handleGroupOwnerChanged,

@@ -45,7 +45,9 @@ export function useForwardMessages(messages: Message[], onDone: () => void) {
     conversations.forEach((item, id) => available.set(id, item));
     return new Map([...available].filter(([, item]) => canForwardTo(item, userId)));
   }, [conversations, otherConversations, userId]);
-  const { query, setQuery, results } = useConversationSearch(destinations);
+  const { query, setQuery, results } = useConversationSearch(destinations, {
+    includeMessages: false,
+  });
 
   function title(conversation: Conversation) {
     if (conversation.type === 'GROUP') return conversation.name || 'Grupo';

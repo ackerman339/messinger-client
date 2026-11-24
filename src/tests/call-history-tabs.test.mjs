@@ -270,11 +270,22 @@ test('chat rows and headers show the participant image and fall back after remov
   assert.equal(avatarSrc(view.renderHeader(privateChat)), undefined);
 });
 
-test('the conversation search uses local usernames, saved names and group names', () => {
+test('the conversation search uses names and cached message text', () => {
   const members = [{ userId: 'alice', username: 'Mi usuario' }, { userId: 'bob', username: 'Roberto' }];
   const conversations = [
-    { id: 'private', type: 'PRIVATE', updatedAt: '2026-11-21', members },
-    { id: 'group', type: 'GROUP', name: 'Equipo Noche', updatedAt: '2026-11-20', members },
+    {
+      id: 'private', type: 'PRIVATE', updatedAt: '2026-11-21', members,
+      lastMessage: { type: 'MESSAGE', content: '¿Revisaste la cotización?' },
+      messages: [{ type: 'MESSAGE', content: 'La reunión quedó para el jueves' }],
+    },
+    {
+      id: 'group', type: 'GROUP', name: 'Equipo Noche', updatedAt: '2026-11-20', members,
+      lastMessage: { type: 'CALL_END', content: 'Llamada finalizada' },
+      messages: [
+        { type: 'MESSAGE', content: 'Confirmamos la reunión' },
+        { type: 'MESSAGE', content: 'Listo para la reunión' },
+      ],
+    },
     {
       id: 'old-group', type: 'GROUP', name: 'Archivo', updatedAt: '2026-11-19',
       members: [{ ...members[1], softDeletedAt: '2026-11-20' }],
@@ -287,6 +298,10 @@ test('the conversation search uses local usernames, saved names and group names'
     ['  BETO perez ', ['private', 'group']],
     ['roberto', ['private', 'group']],
     ['noche', ['group']],
+    ['  REUNION ', ['private', 'group']],
+    ['COTIZACION', ['private']],
+    ['jueves', ['private']],
+    ['llamada finalizada', []],
     ['Mi usuario', []],
     [' ', ['private', 'group', 'old-group']],
   ]) {

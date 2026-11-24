@@ -33,6 +33,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
   const replies = [];
   const copied = [],
     deleted = [],
+    removedFromCache = [],
     updates = [];
   let stateIndex = 0;
   const react = {
@@ -71,7 +72,13 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
       if (name.includes('contacts-context')) return { useContactsContext: () => ({ contacts }) };
       if (name.includes('chat-context'))
         return {
-          useChatContext: () => ({ activeConversation, setReplyTarget: (message) => replies.push(message) }),
+          useChatContext: () => ({
+            activeConversation,
+            removeCachedMessages: (conversationId, messageIds) => {
+              removedFromCache.push({ conversationId, messageIds });
+            },
+            setReplyTarget: (message) => replies.push(message),
+          }),
         };
       if (name.includes('use-cursor-pagination'))
         return {
@@ -104,6 +111,7 @@ function fixture(ids, messages, activeConversation = { id: 'chat' }, contacts = 
     replies,
     copied,
     deleted,
+    removedFromCache,
     updates,
     select: (id) => {
       const bubble = mobile
@@ -184,6 +192,9 @@ test('multiple own messages remain deletable', async () => {
   await f.bar.onDelete();
   assert.deepEqual(f.deleted, [
     { conversationId: 'chat', messagesIds: ['one', 'two'] },
+  ]);
+  assert.deepEqual(f.removedFromCache, [
+    { conversationId: 'chat', messageIds: ['one', 'two'] },
   ]);
 });
 test('received message press enables selection', () => {
