@@ -5,7 +5,56 @@ import type { CallMedia, CallStatus } from '../types/call';
 import type { CallStore } from '../state/call-store';
 import type { CallSession as Session } from '../state/call-session';
 import { wsClient } from '@/clients/websocket-client';
+const RECONNECTING_NOTICE = 'Reconectando…';
+const SIGNALING_TIMEOUT_MS = 65_000;
+
 export function createCallLifecycle(store: CallStore) {
+  const pendingEndings = new Map<string, { expiresAt: number; nextAttempt: number }>();
+
+  function flushPendingEndings(now = Date.now()) {
+    for (const [callId, ending] of pendingEndings) {
+      if (now >= ending.expiresAt) {
+        pendingEndings.delete(callId);
+      } else if (wsClient.authenticated !== false && now >= ending.nextAttempt) {
+        ending.nextAttempt = now + 5000;
+        wsClient.emit('CALL_END', { callId });
+      }
+    }
+  }
+
+  function confirmEnd(callId: string) {
+    pendingEndings.delete(callId);
+  }
+
+  function clearPendingEndings() {
+    pendingEndings.clear();
+  }
+
+  function rememberConnection(session: Session) {
+    const id = wsClient.connectionId;
+    if (id && !session.connectionIds.includes(id)) {
+      // Keep prior sockets until the server confirms the transfer.
+      session.connectionIds = [
+        ...session.connectionIds.slice(0, 1),
+        ...session.connectionIds.slice(1).slice(-6),
+        id,
+      ];
+    }
+  }
+
+  function updateConnectionNotice(session: Session) {
+    if (session.view.status !== 'accepted' && session.view.status !== 'connected') return;
+    const reconnecting =
+      session.signalingLostAt !== undefined ||
+      session.mediaDisconnectedAt !== undefined ||
+      session.peerAvailable === false;
+    if (reconnecting && session.view.notice !== RECONNECTING_NOTICE) {
+      store.publish(session, { notice: RECONNECTING_NOTICE });
+    } else if (!reconnecting && session.view.notice === RECONNECTING_NOTICE) {
+      store.publish(session, { notice: undefined });
+    }
+  }
+
   function start(
     participantId: string,
     media: CallMedia,
@@ -33,6 +82,7 @@ export function createCallLifecycle(store: CallStore) {
     store.setSession(session);
     store.publish(session);
     const name = callerName?.trim().slice(0, 100);
+    rememberConnection(session);
     wsClient.emit('CALL_INIT', {
       ...(session.view.conversationId
         ? { conversationId: session.view.conversationId }
@@ -108,6 +158,7 @@ export function createCallLifecycle(store: CallStore) {
       session.view.callId &&
       session.view.status === 'ringing'
     ) {
+      rememberConnection(session);
       wsClient.emit('CALL_ACCEPT', { callId: session.view.callId });
     }
   }
@@ -120,9 +171,13 @@ export function createCallLifecycle(store: CallStore) {
     session.cancelled = true;
     cleanup(session);
     if (session.view.callId) {
-      wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', {
-        callId: session.view.callId,
-      });
+      const { callId, status } = session.view;
+      if (!reject && (status === 'accepted' || status === 'connected')) {
+        pendingEndings.set(callId, { expiresAt: Date.now() + SIGNALING_TIMEOUT_MS, nextAttempt: 0 });
+        flushPendingEndings();
+      } else {
+        wsClient.emit(reject ? 'CALL_REJECT' : 'CALL_END', { callId });
+      }
       finish(session, reject ? 'rejected' : 'ended');
     } else {
       store.publish(session, { ending: true, notice: 'Cancelando llamada…' });
@@ -171,32 +226,40 @@ export function createCallLifecycle(store: CallStore) {
   }
 
   function sync(session: Session) {
-    if (session.closed) {
-      return;
-    }
+    if (session.closed || wsClient.authenticated === false) return;
+    rememberConnection(session);
     session.syncId = crypto.randomUUID();
     session.nextSync = Date.now() + 5000;
+    const previousConnectionIds = session.connectionIds.filter((id) => id !== wsClient.connectionId);
+    const data = {
+      syncId: session.syncId,
+      ...(previousConnectionIds.length ? { previousConnectionIds } : {}),
+    };
     if (session.view.callId) {
-      wsClient.emit('CALL_SYNC', {
-        syncId: session.syncId,
-        callId: session.view.callId,
-      });
-    } else {
-      if (session.requestId) {
-        wsClient.emit('CALL_SYNC', {
-          syncId: session.syncId,
-          requestId: session.requestId,
-        });
-      }
+      wsClient.emit('CALL_SYNC', { ...data, callId: session.view.callId });
+    } else if (session.requestId) {
+      wsClient.emit('CALL_SYNC', { ...data, requestId: session.requestId });
     }
   }
 
   function tick() {
+    const now = Date.now();
+    flushPendingEndings(now);
     const session = store.getSession();
     if (!session || session.closed) {
       return;
     }
-    const now = Date.now();
+    if (
+      (session.view.status === 'accepted' || session.view.status === 'connected') &&
+      wsClient.authenticated === false
+    ) {
+      session.signalingLostAt ??= now;
+      updateConnectionNotice(session);
+      if (now - session.signalingLostAt >= SIGNALING_TIMEOUT_MS) {
+        finish(session, 'failed', 'Se perdió la conexión de la llamada.');
+        return;
+      }
+    }
     if (
       session.notificationAction &&
       session.notificationResponseDeadline &&
@@ -227,9 +290,13 @@ export function createCallLifecycle(store: CallStore) {
       wsClient.emit('CALL_TIMEOUT', { callId: session.view.callId! });
       sync(session);
     }
-    if (!store.live(session) || !session.negotiation) {
-      return;
-    }
+    if (
+      !store.live(session) ||
+      !session.negotiation ||
+      wsClient.authenticated === false ||
+      session.signalingLostAt !== undefined ||
+      session.peerAvailable === false
+    ) return;
     const result = session.delivery.retry(
       session.view.callId!,
       session.negotiation.negotiationId,
@@ -301,6 +368,10 @@ export function createCallLifecycle(store: CallStore) {
     toggle,
     switchCamera,
     sync,
+    updateConnectionNotice,
+    flushPendingEndings,
+    confirmEnd,
+    clearPendingEndings,
     tick,
     cleanup,
     finish,

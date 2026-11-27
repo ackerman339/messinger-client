@@ -37,9 +37,17 @@ export function subscribeCallEvents(
   on('CALL_INCOMING', calls.handleIncoming);
   on('CALL_ACCEPT', calls.handleAccept);
   on('CALL_REJECT', calls.handleReject);
-  on('CALL_END', calls.handleEnd);
+  on('CALL_END', (data) => {
+    lifecycle.confirmEnd(data.callId);
+    calls.handleEnd(data);
+  });
   on('CALL_CONNECTED', calls.handleConnected);
   on('CALL_STATE', calls.handleState);
+  unsubscribe.push(wsClient.on('WS_AUTHENTICATED', () => {
+    lifecycle.flushPendingEndings();
+    const session = store.getSession();
+    if (session) lifecycle.sync(session);
+  }));
   on('CALL_NEGOTIATION_CREATED', negotiations.handleNegotiationCreated);
   on('CALL_OFFER', negotiations.handleOffer);
   on('CALL_ANSWER', negotiations.handleAnswer);
@@ -50,6 +58,9 @@ export function subscribeCallEvents(
   unsubscribe.push(
     wsClient.on('ERROR', (data) => {
       const session = store.getSession();
+      const code = data?.error?.code;
+      if (code?.includes('CALL_RECOVERY_IN_PROGRESS') ||
+          code?.includes('CALL_NEGOTIATION_IN_PROGRESS')) return;
       if (!session || session.closed || !data?.error?.code?.includes('CALL_')) {
         return;
       }
@@ -70,6 +81,7 @@ export function subscribeCallEvents(
   return () => {
     unsubscribe.forEach((off) => off());
     clearInterval(timer);
+    lifecycle.clearPendingEndings();
     document.removeEventListener('visibilitychange', onVisible);
     const session = store.getSession();
     if (!session || session.closed) {

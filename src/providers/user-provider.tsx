@@ -70,6 +70,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let controller: AbortController | undefined;
     let retry: number | undefined;
     let notificationsReady = false;
+    let sessionVerified = false;
     if (cachedSession?.user) messageSync.setAccount(cachedSession.user.id);
 
     function goOffline() {
@@ -99,6 +100,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUser(profile);
         messageSync.setAccount(profile.id);
         setStatus('ready');
+        sessionVerified = true;
         connect(import.meta.env.VITE_WEB_SOCKET_URL);
         if (!notificationsReady) {
           notificationsReady = true;
@@ -111,6 +113,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           messageSync.setAccount();
           disconnect();
           setUser(null);
+          sessionVerified = false;
           setStatus('signedOut');
         } else {
           setStatus('unavailable');
@@ -119,7 +122,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    window.addEventListener('online', verifySession);
+    function goOnline() {
+      if (!loggedOut.current && sessionVerified) connect(import.meta.env.VITE_WEB_SOCKET_URL);
+      void verifySession();
+    }
+
+    window.addEventListener('online', goOnline);
     window.addEventListener('offline', goOffline);
     void verifySession();
 
@@ -127,7 +135,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       disposed = true;
       window.clearTimeout(retry);
       controller?.abort();
-      window.removeEventListener('online', verifySession);
+      window.removeEventListener('online', goOnline);
       window.removeEventListener('offline', goOffline);
       messageSync.setAccount();
       disconnect();

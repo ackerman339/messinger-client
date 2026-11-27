@@ -39,7 +39,7 @@ export function createSignalDelivery() {
       if (signal.next > now) {
         continue;
       }
-      if (signal.attempts >= MAX_ATTEMPTS) {
+      if (!deadline && signal.attempts >= MAX_ATTEMPTS) {
         clear();
         return 'exhausted';
       }

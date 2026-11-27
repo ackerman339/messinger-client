@@ -5,6 +5,8 @@ import type { CallStore } from '../state/call-store';
 import type { CallSession as Session } from '../state/call-session';
 import { wsClient } from '@/clients/websocket-client';
 
+const MEDIA_DISCONNECT_GRACE_MS = 3000;
+
 export function createCallNegotiation(store: CallStore, lifecycle: CallLifecycle) {
   function setNegotiation(session: Session, negotiation: Negotiation) {
     if (session.negotiation) {
@@ -13,6 +15,7 @@ export function createCallNegotiation(store: CallStore, lifecycle: CallLifecycle
     }
     session.negotiation = negotiation;
     session.delivery.clear();
+    session.negotiationRequest = undefined;
   }
 
   function enqueue(session: Session, task: () => Promise<void>) {
@@ -53,20 +56,94 @@ export function createCallNegotiation(store: CallStore, lifecycle: CallLifecycle
 
   function handlePeerState(session: Session, state: RTCPeerConnectionState) {
     if (state === 'connected') {
+      session.mediaDisconnectedAt = undefined;
       if (!session.connectedReported) {
         session.connectedReported = true;
         wsClient.emit('CALL_CONNECTED', { callId: session.view.callId! });
       }
-      store.publish(session, { notice: undefined });
+      reportRecovered(session);
+    } else if (
+      (state === 'failed' || state === 'disconnected') &&
+      session.mediaDisconnectedAt === undefined
+    ) {
+      session.mediaDisconnectedAt = Date.now();
+      wsClient.probeConnection();
+      lifecycle.sync(session);
     }
-    if (state === 'failed') {
-      store.publish(session, {
-        notice: 'Falló la conexión de medios. Puedes finalizar y volver a llamar.',
-      });
+    lifecycle.updateConnectionNotice(session);
+  }
+
+  function reportRecovered(session: Session) {
+    const current = session.negotiation;
+    const peer = session.rtc.peer;
+    if (
+      current?.type !== 'ICE_RESTART' ||
+      current.status !== 'COMPLETED' ||
+      session.remoteNegotiationId !== current.negotiationId ||
+      peer?.connectionState !== 'connected' ||
+      (peer.iceConnectionState !== 'connected' && peer.iceConnectionState !== 'completed')
+    ) return;
+    wsClient.emit('CALL_RECOVERED', {
+      callId: session.view.callId!,
+      negotiationId: current.negotiationId,
+    });
+  }
+
+  function createOffer(session: Session, current: Negotiation) {
+    enqueue(session, async () => {
+      const isCurrent = () =>
+        store.live(session) && session.negotiation?.negotiationId === current.negotiationId;
+      if (!isCurrent()) return;
+      const peer = await prepare(session);
+      if (!isCurrent()) return;
+      const restarting = current.type === 'ICE_RESTART';
+      if (restarting) await session.rtc.refreshIceServers(peer);
+      if (!isCurrent()) return;
+      const offer = await peer.createOffer(restarting ? { iceRestart: true } : undefined);
+      if (!isCurrent()) return;
+      await peer.setLocalDescription(offer);
+      if (!isCurrent()) return;
+      await deliver(session, 'CALL_OFFER', peer.localDescription!.sdp);
+    });
+  }
+
+  function syncMedia(session: Session, state: CallServerPayloads['CALL_STATE']) {
+    const { call, negotiation } = state;
+    const peer = session.rtc.peer;
+    if (call.status === 'accepted' && peer?.connectionState === 'connected') {
+      wsClient.emit('CALL_CONNECTED', { callId: call.callId });
     }
-    if (state === 'disconnected') {
-      store.publish(session, { notice: 'Conexión de medios interrumpida…' });
+    if (call.peerAvailable !== true) return;
+
+    if (call.status === 'accepted' && !session.view.incoming && !negotiation) {
+      requestNegotiation(session, 'INITIAL');
+    } else if (
+      call.status === 'connected' &&
+      !call.recoveryExpiresAt &&
+      peer &&
+      peer.signalingState === 'stable' &&
+      (peer.connectionState === 'failed' ||
+        peer.iceConnectionState === 'failed' ||
+        (session.mediaDisconnectedAt !== undefined &&
+          Date.now() - session.mediaDisconnectedAt >= MEDIA_DISCONNECT_GRACE_MS))
+    ) {
+      requestNegotiation(session, 'ICE_RESTART');
     }
+
+    const recoveredAt = session.view.incoming
+      ? negotiation?.calleeRecoveredAt
+      : negotiation?.callerRecoveredAt;
+    if (call.recoveryExpiresAt && Date.parse(call.recoveryExpiresAt) > Date.now() && !recoveredAt)
+      reportRecovered(session);
+  }
+
+  function requestNegotiation(session: Session, type: 'INITIAL' | 'ICE_RESTART') {
+    session.negotiationRequest ??= crypto.randomUUID();
+    wsClient.emit('CALL_NEGOTIATION_INIT', {
+      callId: session.view.callId!,
+      requestId: session.negotiationRequest,
+      type,
+    });
   }
 
   async function deliver(session: Session, type: 'CALL_OFFER' | 'CALL_ANSWER', sdp: string) {
@@ -107,6 +184,12 @@ export function createCallNegotiation(store: CallStore, lifecycle: CallLifecycle
       const peer = await prepare(session);
       if (!store.live(session) || session.negotiation?.negotiationId !== data.negotiationId) {
         return;
+      }
+      if (type === 'CALL_OFFER' && session.negotiation.type === 'ICE_RESTART') {
+        await session.rtc.refreshIceServers(peer);
+        if (!store.live(session) || session.negotiation?.negotiationId !== data.negotiationId) {
+          return;
+        }
       }
       await peer.setRemoteDescription({
         type: type === 'CALL_OFFER' ? 'offer' : 'answer',
@@ -161,6 +244,6 @@ export function createCallNegotiation(store: CallStore, lifecycle: CallLifecycle
       await peer.addIceCandidate(candidate ?? undefined);
     }
   }
-  return { setNegotiation, enqueue, prepare, handlePeerState, deliver, receive, flushCandidates };
+  return { setNegotiation, enqueue, receive, flushCandidates, createOffer, syncMedia, reportRecovered, requestNegotiation };
 }
 export type CallNegotiation = ReturnType<typeof createCallNegotiation>;

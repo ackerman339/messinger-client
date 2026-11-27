@@ -70,11 +70,15 @@ export function createPeerSession() {
         }
       };
     };
-    connection.onconnectionstatechange = () => {
-      if (callbacks.isActive()) {
-        callbacks.onConnectionState(connection.connectionState);
-      }
-    };
+    function publishConnectionState() {
+      if (!callbacks.isActive()) return;
+      const ice = connection.iceConnectionState;
+      callbacks.onConnectionState(
+        ice === 'disconnected' || ice === 'failed' ? ice : connection.connectionState,
+      );
+    }
+    connection.onconnectionstatechange = publishConnectionState;
+    connection.oniceconnectionstatechange = publishConnectionState;
     localStream.getTracks().forEach((track) => {
       connection.addTrack(track, localStream);
       track.onended = () => {
@@ -123,8 +127,18 @@ export function createPeerSession() {
     local = undefined;
     remote = undefined;
   }
+  async function refreshIceServers(connection: RTCPeerConnection) {
+    try {
+      const iceServers = await getIceServers(4000);
+      if (peer === connection) connection.setConfiguration({ iceServers });
+    } catch {
+      // The peer can still retry with its existing ICE servers.
+    }
+  }
+
   return {
     prepare,
+    refreshIceServers,
     toggle,
     switchCamera: async () => {
       await switchCamera?.();

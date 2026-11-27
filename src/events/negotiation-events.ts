@@ -10,21 +10,7 @@ export function createNegotiationEventHandlers(store: CallStore, lifecycle: Call
       return;
     }
     negotiation.setNegotiation(session, data);
-    negotiation.enqueue(session, async () => {
-      const peer = await negotiation.prepare(session);
-      if (!store.live(session)) {
-        return;
-      }
-      const offer = await peer.createOffer();
-      if (!store.live(session)) {
-        return;
-      }
-      await peer.setLocalDescription(offer);
-      if (!store.live(session)) {
-        return;
-      }
-      await negotiation.deliver(session, 'CALL_OFFER', peer.localDescription!.sdp);
-    });
+    negotiation.createOffer(session, data);
   }
 
   function handleOffer(data: CallServerPayloads['CALL_OFFER']) {
@@ -77,6 +63,7 @@ export function createNegotiationEventHandlers(store: CallStore, lifecycle: Call
     if (session?.negotiation?.negotiationId === data.negotiationId) {
       session.negotiation.status = data.status;
       session.delivery.clear();
+      negotiation.reportRecovered(session);
     }
   }
 

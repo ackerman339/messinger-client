@@ -6,8 +6,9 @@ export async function createGroupRoom(
   onDisconnected: (reason: GroupRoomDisconnect) => void,
   onParticipantConnected: () => void,
 ) {
-  const { DisconnectReason, Room, RoomEvent } = await import('livekit-client');
-  return new Room({ adaptiveStream: true, dynacast: true })
+  const { DefaultReconnectPolicy, DisconnectReason, Room, RoomEvent } = await import('livekit-client');
+  const reconnectPolicy = new DefaultReconnectPolicy([0, 300, 1200, 2700, 4000, 5000]);
+  return new Room({ adaptiveStream: true, dynacast: true, reconnectPolicy })
     .on(RoomEvent.Disconnected, (reason) => {
       if (
         reason === DisconnectReason.ROOM_DELETED ||
@@ -16,6 +17,7 @@ export async function createGroupRoom(
         onDisconnected('room-ended');
       } else if (
         reason === DisconnectReason.PARTICIPANT_REMOVED ||
+        reason === DisconnectReason.DUPLICATE_IDENTITY ||
         reason === DisconnectReason.CLIENT_INITIATED
       ) {
         onDisconnected('left');

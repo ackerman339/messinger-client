@@ -13,6 +13,7 @@ export type GroupCallView = {
   call: GroupCall;
   room: Room;
   preparingMedia: boolean;
+  reconnecting?: boolean;
   tryingRelay?: boolean;
   initialMediaError?: string;
 };

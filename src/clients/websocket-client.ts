@@ -39,6 +39,9 @@ let authenticationTimer: ReturnType<typeof setTimeout> | undefined;
 let heartbeat: ReturnType<typeof setInterval> | undefined;
 let lastPong = 0;
 let authGeneration = 0;
+let authenticated = false;
+let connectionId: string | undefined;
+let connectionProbe: ReturnType<typeof setTimeout> | undefined;
 
 const MAX_RECONNECT_DELAY = 30_000;
 const INITIAL_RECONNECT_DELAY = 300;
@@ -64,7 +67,15 @@ function getReconnectDelay(): number {
   return Math.floor(Math.random() * exponentialDelay);
 }
 
+function clearConnectionProbe() {
+  clearTimeout(connectionProbe);
+  connectionProbe = undefined;
+}
+
 function stopMessageTransport() {
+  clearConnectionProbe();
+  authenticated = false;
+  connectionId = undefined;
   clearTimeout(authenticationTimer);
   clearInterval(heartbeat);
   messageSync.disconnected();
@@ -100,6 +111,15 @@ function startMessageTransport(source: WebSocket, userId: string) {
   );
 }
 
+function probeConnection() {
+  const source = socket;
+  if (!source || !authenticated || connectionProbe) return;
+  if (sendFrame(source, { type: 'WS_PING', data: null })) {
+    // A network switch can leave the old socket open until its next heartbeat.
+    connectionProbe = setTimeout(() => replaceSocket(source), 4000);
+  }
+}
+
 function sendFrame(source: WebSocket, frame: object) {
   if (source !== socket || source.readyState !== WebSocket.OPEN) return false;
   try {
@@ -123,10 +143,15 @@ function handleMessage(event: MessageEvent) {
     };
 
     if (type === WS_SERVER_EVENTS.WS_AUTHENTICATED) {
-      startMessageTransport(source, (data as WsServerPayloads['WS_AUTHENTICATED']).userId);
+      const auth = data as WsServerPayloads['WS_AUTHENTICATED'];
+      authenticated = true;
+      connectionId = auth.connectionId;
+      startMessageTransport(source, auth.userId);
+      handlers.get(type)?.forEach((handler) => handler(auth));
       return;
     }
     if (type === WS_SERVER_EVENTS.WS_PONG) {
+      clearConnectionProbe();
       lastPong = Date.now();
       return;
     }
@@ -350,18 +375,9 @@ export function disconnect() {
 }
 
 export function emit<E extends ClientEvent>(type: E, data: WsClientPayloads[E]) {
-  if (socket?.readyState === WebSocket.OPEN) {
-    socket.send(
-      JSON.stringify({
-        type,
-        data,
-      }),
-    );
-
-    return;
-  }
-
+  if (socket && sendFrame(socket, { type, data })) return true;
   console.warn('[ws] socket not open, event dropped:', type);
+  return false;
 }
 
 export function on<E extends ServerEvent>(type: E, handler: Handler<WsServerPayloads[E]>) {
@@ -415,6 +431,13 @@ export function request<
 }
 
 export const wsClient = {
+  get authenticated() {
+    return authenticated;
+  },
+  get connectionId() {
+    return connectionId;
+  },
+  probeConnection,
   request,
   connect,
   disconnect,

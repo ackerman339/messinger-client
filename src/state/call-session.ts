@@ -42,6 +42,10 @@ export interface CallSession {
   negotiation?: Negotiation;
   negotiationRequest?: string;
   syncId?: string;
+  connectionIds: string[];
+  signalingLostAt?: number;
+  mediaDisconnectedAt?: number;
+  peerAvailable?: boolean;
   rtc: ReturnType<typeof createPeerSession>;
   remoteNegotiationId?: string;
   candidates: Map<string, (RTCIceCandidateInit | null)[]>;
@@ -65,6 +69,7 @@ export function createCallSession(
     requestId,
     cancelled: false,
     closed: false,
+    connectionIds: [],
     rtc: createPeerSession(),
     candidates: new Map(),
     retired: new Set(),

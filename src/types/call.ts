@@ -57,7 +57,7 @@ export interface CallClientPayloads {
   CALL_SIGNAL_ACK: SignalAck;
   CALL_ICE_CANDIDATE: Candidate;
   CALL_RECOVERED: Reference & { negotiationId: string };
-  CALL_SYNC: { syncId: string } & (
+  CALL_SYNC: { syncId: string; previousConnectionIds?: string[] } & (
     | { callId: string; requestId?: never }
     | { requestId: string; callId?: never }
   );
@@ -82,6 +82,7 @@ export interface CallSnapshot extends Reference {
   status: CallStatus;
   role: "CALLER" | "CALLEE";
   isSelectedConnection: boolean;
+  peerAvailable?: boolean;
   isTerminal: boolean;
   createdAt: string;
   acceptedAt: string | null;
@@ -166,7 +167,11 @@ export interface CallServerPayloads {
   CALL_STATE: {
     syncId: string;
     call: CallSnapshot;
-    negotiation: (Negotiation & { isOfferer: boolean }) | null;
+    negotiation: (Negotiation & {
+      isOfferer: boolean;
+      callerRecoveredAt?: string | null;
+      calleeRecoveredAt?: string | null;
+    }) | null;
   };
 }
 

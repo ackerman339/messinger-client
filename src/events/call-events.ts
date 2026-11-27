@@ -86,12 +86,7 @@ export function createCallEventHandlers(
       return;
     }
     if (data.shouldInitiateNegotiation && !session.negotiationRequest && !session.negotiation) {
-      session.negotiationRequest = crypto.randomUUID();
-      wsClient.emit('CALL_NEGOTIATION_INIT', {
-        callId: data.callId,
-        requestId: session.negotiationRequest,
-        type: 'INITIAL',
-      });
+      negotiation.requestNegotiation(session, 'INITIAL');
     }
   }
 
@@ -142,6 +137,11 @@ export function createCallEventHandlers(
     }
     const call = data.call;
     session.view.callId = call.callId;
+    session.signalingLostAt = undefined;
+    session.peerAvailable = call.peerAvailable;
+    if (call.isSelectedConnection && wsClient.connectionId) {
+      session.connectionIds = [wsClient.connectionId];
+    }
     const notificationAction = session.notificationAction;
     // Metadata, not the notification payload, determines role, participant and initial media.
     store.publish(session, {
@@ -165,8 +165,13 @@ export function createCallEventHandlers(
       connectedAt: call.connectedAt,
       expiresAt: call.expiresAt ?? session.deadline,
     });
+    lifecycle.updateConnectionNotice(session);
     if (!call.isSelectedConnection) {
       lifecycle.cleanup(session);
+      if (call.status === 'accepted' || call.status === 'connected') {
+        lifecycle.finish(session, 'ended', 'Llamada atendida en otro dispositivo');
+        return;
+      }
     }
     if (notificationAction) {
       session.notificationAction = undefined;
@@ -193,7 +198,11 @@ export function createCallEventHandlers(
     }
     if (data.negotiation && call.isSelectedConnection) {
       if (session.negotiation?.negotiationId !== data.negotiation.negotiationId) {
-        negotiation.setNegotiation(session, data.negotiation);
+        const current = data.negotiation;
+        negotiation.setNegotiation(session, current);
+        if (current.isOfferer && current.status === 'PENDING') {
+          negotiation.createOffer(session, current);
+        }
       } else {
         session.negotiation.status = data.negotiation.status;
       }
@@ -206,6 +215,7 @@ export function createCallEventHandlers(
         negotiation.receive(session, 'CALL_OFFER', offer);
       }
     }
+    if (call.isSelectedConnection) negotiation.syncMedia(session, data);
   }
   return {
     handleCreated,

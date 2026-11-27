@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import ts from 'typescript';
 
-function loadGroupModule(file, sdk) {
+function loadGroupModule(file, sdk, imports = {}) {
   const source = readFileSync(
     new URL(`../group-calls/${file}.ts`, import.meta.url),
     'utf8',
@@ -14,6 +14,7 @@ function loadGroupModule(file, sdk) {
   const module = { exports: {} };
   new Function('require', 'module', 'exports', outputText)(
     (name) => {
+      if (name in imports) return imports[name];
       assert.equal(name, 'livekit-client');
       return sdk;
     },
@@ -116,4 +117,41 @@ test('cancelling a group call releases a microphone granted after the permission
   });
   await permission.promise;
   assert.equal(stopped, true);
+});
+
+test('group recovery rejoins the same call with fresh credentials and leaves muted media disabled', async () => {
+  const call = { id: 'group-call', conversationId: 'group', media: 'video' };
+  const restored = [];
+  const abort = new AbortController();
+  const { recoverGroupRoom } = loadGroupModule('group-room-recovery', {
+    ConnectionState: { Disconnected: 'disconnected' },
+  }, {
+    axios: { isAxiosError: () => false },
+    './api': {
+      groupCallApi: {
+        async join(target, fromNotification, signal) {
+          assert.deepEqual(target, call);
+          assert.equal(fromNotification, false);
+          assert.equal(signal, abort.signal);
+          return { url: 'wss://livekit', token: 'fresh-token' };
+        },
+      },
+    },
+  });
+  const room = {
+    state: 'disconnected',
+    localParticipant: {
+      async setMicrophoneEnabled() { assert.fail('disabled microphone was restored'); },
+      async setCameraEnabled(enabled) { restored.push(enabled); },
+    },
+  };
+  await recoverGroupRoom(room, call, { microphone: false, camera: true }, abort.signal, async (url, token) => {
+    assert.deepEqual([url, token], ['wss://livekit', 'fresh-token']);
+    room.state = 'connected';
+  });
+  assert.deepEqual(restored, [true]);
+  abort.abort();
+  await recoverGroupRoom(room, call, { microphone: false, camera: true }, abort.signal, async () => {
+    assert.fail('a cancelled call rejoined');
+  });
 });

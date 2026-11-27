@@ -23,11 +23,11 @@ export const groupCallApi = {
     );
     return data.result;
   },
-  async join(call: GroupCallTarget, fromNotification = false) {
+  async join(call: GroupCallTarget, fromNotification = false, signal?: AbortSignal) {
     const { data } = await httpClient.post<{ result: GroupCallAccess }>(
       `${callPath(call)}/join`,
       { fromNotification },
-      options,
+      { ...options, signal },
     );
     return data.result;
   },

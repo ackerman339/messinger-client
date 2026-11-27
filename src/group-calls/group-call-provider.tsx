@@ -10,6 +10,7 @@ import { isTerminal } from '../types/call';
 import { wsClient } from '../clients/websocket-client';
 import type { CallMedia } from '../types/call';
 import { groupCallApi } from './api';
+import { recoverGroupRoom, trackGroupMedia } from './group-room-recovery';
 import { GroupCallContext } from './group-call-context';
 import type { GroupCallScreen, GroupCallView } from './group-call-context';
 import { releaseGroupCall, reserveGroupCall } from './occupancy';
@@ -24,11 +25,12 @@ import type { Conversation } from '../types/conversation';
 import { prepareGroupMedia, publishGroupMedia } from './group-media';
 
 type Session = {
-  call?: Pick<GroupCall, 'id' | 'conversationId'>;
+  call?: GroupCallTarget;
   room?: Room;
   abort: AbortController;
   tracks: LocalTrack[];
   opening?: Promise<void>;
+  recovery?: Promise<void>;
   close?: Promise<void>;
   attemptedConnection: boolean;
   joined: boolean;
@@ -105,6 +107,7 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         // Cancel an in-flight Room.connect before waiting for the opening task.
         await session.room?.disconnect().catch(() => {});
         await session.opening?.catch(() => {});
+        await session.recovery?.catch(() => {});
         if (notifyServer && session.attemptedConnection && session.call) {
           await groupCallApi.leave(session.call).catch(() => {});
         }
@@ -307,13 +310,41 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
           if (session.closing) return;
           if (reason === 'room-ended' && session.call) clearCall(session.call);
           if (!session.joined && reason !== 'room-ended') return;
-          void stopSession(
-            session,
-            false,
-            reason === 'unexpected'
-              ? 'Se perdió la conexión de audio y video.'
-              : undefined,
-          );
+          if (reason !== 'unexpected') {
+            void stopSession(session);
+            return;
+          }
+          const { call, abort: { signal } } = session;
+          if (!call || session.recovery) return;
+          setView((current) => current && { ...current, reconnecting: true });
+          session.recovery = recoverGroupRoom(
+            room,
+            call,
+            getMedia(),
+            signal,
+            (url, token) => connectGroupRoom(room, url, token, signal, () => {}),
+          ).then((initialMediaError) => {
+            if (signal.aborted) return;
+            setView((current) => current && {
+              ...current,
+              reconnecting: false,
+              initialMediaError: initialMediaError ?? current.initialMediaError,
+            });
+          }).finally(() => {
+            session.recovery = undefined;
+          });
+          void session.recovery.catch((error: unknown) => {
+            if (signal.aborted) return;
+            const status = isAxiosError(error) ? error.response?.status : undefined;
+            if (status === 404) clearCall(call);
+            void stopSession(
+              session,
+              false,
+              status === 403 || status === 404
+                ? connectionError(error, true)
+                : 'Se perdió la conexión de audio y video.',
+            );
+          });
         },
         () => {
           if (!session.closing) setRingbackUntil(null);
@@ -324,8 +355,9 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
         return;
       }
       session.room = room;
+      const getMedia = trackGroupMedia(room);
       const access = target
-        ? await groupCallApi.join(target, fromNotification)
+        ? await groupCallApi.join(target, fromNotification, session.abort.signal)
         : await groupCallApi.start(conversationId, media);
       if (session.closing) return;
       session.call = access.call;
@@ -358,7 +390,7 @@ export function GroupCallProvider({ children }: { children: ReactNode }) {
       setView(view);
       void publishGroupMedia(room, prepared, signal).then((initialMediaError) => {
         if (!signal.aborted)
-          setView({ ...view, preparingMedia: false, initialMediaError });
+          setView((current) => current && { ...current, preparingMedia: false, initialMediaError });
       });
     })();
     void session.opening.catch((cause: unknown) => {

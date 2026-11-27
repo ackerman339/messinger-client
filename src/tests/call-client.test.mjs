@@ -9,6 +9,7 @@ const sent = [];
 const ws = {
   on(event, handler) { events.set(event, handler); return () => events.delete(event); },
   emit(type, data) { sent.push({ type, data }); },
+  probeConnection() {},
 };
 globalThis.__callTestWs = ws;
 globalThis.__callTestHttp = { get: async () => ({ data: { iceServers: [] } }) };
@@ -69,8 +70,13 @@ function mockMedia(video = false) {
     senders = [];
     addTrack(track) { this.senders.push({ track, async replaceTrack(next) { this.track = next; } }); }
     getSenders() { return this.senders; }
+    setConfiguration(config) { this.configuration = config; }
     async setRemoteDescription(value) { this.applied++; this.remoteDescription = value; }
     async setLocalDescription(value) { this.localDescription = value; }
+    async createOffer(options) {
+      this.offerOptions = options;
+      return { type: 'offer', sdp: 'restart offer' };
+    }
     async createAnswer() { this.answers++; return { type: 'answer', sdp: 'answer' }; }
     async addIceCandidate(value) { this.added.push(value); }
     close() { this.closed = true; }
@@ -640,4 +646,91 @@ test('missed CALL_END supplies callerName for the web missed notification', asyn
   notifications.update(client.getSnapshot());
   await flush();
   assert.equal(shown[0].title, 'Llamada perdida de María Pérez');
+});
+
+test('a replacement WebSocket resumes call signaling without closing the peer or panel', async (t) => {
+  ws.connectionId = 'previous-socket';
+  t.after(() => {
+    delete ws.connectionId;
+    delete ws.authenticated;
+  });
+  const { client } = await selectedOffer(t);
+  const connectedAt = new Date().toISOString();
+  events.get('CALL_CONNECTED')({ callId: 'call', status: 'connected', connectedAt });
+  ws.authenticated = false;
+  delete ws.connectionId;
+  tick();
+  assert.equal(client.getSnapshot().status, 'connected');
+  assert.equal(client.getSnapshot().notice, 'Reconectando…');
+  assert.equal(peers[0].closed, undefined);
+
+  ws.authenticated = true;
+  ws.connectionId = 'replacement-socket';
+  events.get('WS_AUTHENTICATED')({});
+  const sync = sent.findLast((item) => item.type === 'CALL_SYNC');
+  assert.deepEqual(sync.data.previousConnectionIds, ['previous-socket']);
+  events.get('CALL_STATE')({
+    syncId: sync.data.syncId,
+    call: { ...incoming, role: 'CALLEE', status: 'connected', isSelectedConnection: true, peerAvailable: true, connectedAt },
+    negotiation: { negotiationId: 'n1', status: 'COMPLETED', type: 'INITIAL' },
+  });
+  assert.equal(client.getSnapshot().notice, undefined);
+  assert.equal(client.getSnapshot().connectedAt, connectedAt);
+  assert.equal(peers.length, 1);
+  assert.equal(peers[0].closed, undefined);
+});
+
+test('the connected call restarts ICE and confirms media recovery on the existing peer', async (t) => {
+  const { client } = await selectedOffer(t);
+  events.get('CALL_CONNECTED')({ callId: 'call', status: 'connected' });
+  const peer = peers[0];
+  peer.signalingState = 'stable';
+  peer.connectionState = 'failed';
+  peer.onconnectionstatechange();
+  const sync = sent.findLast((item) => item.type === 'CALL_SYNC');
+  events.get('CALL_STATE')({
+    syncId: sync.data.syncId,
+    call: { ...incoming, role: 'CALLEE', status: 'connected', isSelectedConnection: true, peerAvailable: true },
+    negotiation: { negotiationId: 'n1', status: 'COMPLETED', type: 'INITIAL' },
+  });
+  const restart = sent.findLast((item) => item.type === 'CALL_NEGOTIATION_INIT');
+  assert.equal(restart.data.type, 'ICE_RESTART');
+  events.get('CALL_NEGOTIATION_CREATED')({
+    ...restart.data, negotiationId: 'n2', status: 'PENDING',
+  });
+  await flush();
+  assert.deepEqual(peer.configuration, { iceServers: [] });
+  assert.deepEqual(peer.offerOptions, { iceRestart: true });
+
+  events.get('CALL_ANSWER')({
+    callId: 'call', negotiationId: 'n2', sdp: 'restart answer', signalId: await sdpHash('restart answer'),
+  });
+  await flush();
+  events.get('CALL_NEGOTIATION_COMPLETED')({ callId: 'call', negotiationId: 'n2', status: 'COMPLETED' });
+  assert.equal(sent.some((item) => item.type === 'CALL_RECOVERED'), false);
+  peer.connectionState = 'connected';
+  peer.iceConnectionState = 'connected';
+  peer.oniceconnectionstatechange();
+  assert.deepEqual(sent.findLast((item) => item.type === 'CALL_RECOVERED').data, {
+    callId: 'call', negotiationId: 'n2',
+  });
+  assert.equal(client.getSnapshot().status, 'connected');
+  assert.equal(client.getSnapshot().notice, undefined);
+  assert.equal(peers.length, 1);
+});
+
+test('hanging up offline closes the panel state and sends the end after authentication', async (t) => {
+  const { client } = await selectedOffer(t);
+  t.after(() => { delete ws.authenticated; });
+  events.get('CALL_CONNECTED')({ callId: 'call', status: 'connected' });
+  ws.authenticated = false;
+  client.end();
+  assert.equal(client.getSnapshot().status, 'ended');
+  assert.equal(peers[0].closed, true);
+  assert.equal(sent.some((item) => item.type === 'CALL_END'), false);
+
+  ws.authenticated = true;
+  events.get('WS_AUTHENTICATED')({});
+  assert.deepEqual(sent.findLast((item) => item.type === 'CALL_END').data, { callId: 'call' });
+  assert.equal(client.getSnapshot().status, 'ended');
 });

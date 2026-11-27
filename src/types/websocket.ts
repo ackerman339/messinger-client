@@ -154,7 +154,7 @@ export interface WsClientPayloads extends CallClientPayloads {
 
 // --- Data real que manda el SERVIDOR ---
 export interface WsServerPayloads extends CallServerPayloads {
-  [WS_SERVER_EVENTS.WS_AUTHENTICATED]: { userId: string };
+  [WS_SERVER_EVENTS.WS_AUTHENTICATED]: { userId: string; connectionId?: string };
   [WS_SERVER_EVENTS.WS_PONG]: null;
   [WS_SERVER_EVENTS.LOCATION_UPDATED]: LocationUpdate;
   [WS_SERVER_EVENTS.LOCATION_STOP_CONFIRMED]: { messageId: string };

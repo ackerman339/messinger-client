@@ -43,7 +43,7 @@ function TrackVideo({ track, local }: { track: VideoTrack; local: boolean }) {
 }
 
 export default function GroupRoomPanel({ view }: { view: GroupCallView }) {
-  const { room, call, title, preparingMedia, initialMediaError, tryingRelay } = view;
+  const { room, call, title, preparingMedia, initialMediaError, tryingRelay, reconnecting } = view;
   const { canEnd, ending, end, leave, error } = useGroupCall();
   const {
     state,
@@ -58,11 +58,11 @@ export default function GroupRoomPanel({ view }: { view: GroupCallView }) {
   } = useGroupRoom(room);
   const [minimized, setMinimized] = useState(false);
   const [audioError, setAudioError] = useState(false);
-  const connected = state === ConnectionState.Connected;
+  const connected = !reconnecting && state === ConnectionState.Connected;
   const video = call.media === 'video';
   const status = connected
     ? `${participants.length}/${MAX_GROUP_CALL_PARTICIPANTS} en la llamada`
-    : state === ConnectionState.Reconnecting ||
+    : reconnecting || state === ConnectionState.Reconnecting ||
         state === ConnectionState.SignalReconnecting
       ? 'Reconectando…'
       : tryingRelay
